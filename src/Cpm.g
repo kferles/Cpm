@@ -30,7 +30,7 @@ This grammar requires ANTLR v3.0.1 or higher.
 Terence Parr
 July 2006
 */ 
-grammar C;
+grammar Cpm;
 options {
     backtrack=true;
     memoize=true;
