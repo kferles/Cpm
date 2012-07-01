@@ -38,7 +38,7 @@ public class Method extends Type{
         public boolean equals(Object o){
             if(o instanceof Signature){
                 Signature s1 = (Signature)o;
-                if(this.returnValue.equals(s1.returnValue) == false) return false;
+               //if(this.returnValue.equals(s1.returnValue) == false) return false;
                 if((this.parameters == null && s1.parameters != null)
                     ||
                     (this.parameters != null && s1.parameters == null)) return false;
@@ -66,6 +66,8 @@ public class Method extends Type{
     boolean isVirtual,
             isAbstract,
             isConst;
+    
+    UserDefinedType belongsTo = null;
     
     /**
      * Constructs a Method object given the type of the return value and
@@ -97,9 +99,21 @@ public class Method extends Type{
         if(o == null) return false;
         if(o instanceof Method){
             Method m = (Method)o;
-            return this.s.equals(m.s);
+            if(this.s.equals(m.s) == false) return false;
+            if(this.s.returnValue.equals(m.s.returnValue) == false) return false;
+            return true;
         }
         return false;
+    }
+    
+    /**
+     * Sets the type that the method belongs to. If the method is in global scope
+     * this method is not being invoked.
+     * 
+     * @param t The UserDefinedType class that represents method's type.
+     */
+    public void setType(UserDefinedType t){
+        this.belongsTo = t;
     }
     
     @Override
