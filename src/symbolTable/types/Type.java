@@ -6,9 +6,20 @@ package symbolTable.types;
  */
 public abstract class Type {
     
+    /**
+     * By default no type is neither const nor volatile.
+     */
+    protected boolean isConst = false,
+                    isVolatile = false;
+    
     protected abstract StringBuilder getString(StringBuilder aggr);
     
-    public abstract boolean subType(Type lhs);
+    /**
+     * It checks either or not this is subtype of o, i.e this <: o.
+     * @param o The other type.
+     * @return True if this <: o and false otherwise.
+     */
+    public abstract boolean subType(Type o);
     
     @Override
     public String toString(){
@@ -16,26 +27,40 @@ public abstract class Type {
         return this.getString(rv).toString();
     }
     
+    /**
+     * Declares that the type is const.
+     */
+    public void setIsConst(){
+        this.isConst = true;
+    }
+    
+    /**
+     * Declares that the type is volatile.
+     */
+    public void setIsVolatile(){
+        this.isVolatile = true;
+    }
 //    public String getType(){
 //        StringBuilder rv = new StringBuilder();
 //        return this.findType(rv).toString();
 //    }
     
-//    @Override
-//    public boolean equals(Object t){
-//        if(t instanceof Type){
-//            Type t1 = (Type)t;
-//            return this.getType().equals(t1.getType());
-//        }
-//        else{
-//            return false;
-//        }
-//    }
+    @Override
+    public boolean equals(Object t){
+        if(t instanceof Type){
+            Type t1 = (Type)t;
+            if(this.isConst == t1.isConst && this.isVolatile == t1.isVolatile) return true;
+            return false;
+        }
+        else{
+            return false;
+        }
+    }
 
-//    @Override
-//    public int hashCode() {
-//        int hash = 7;
-//        return hash;
-//    }
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        return hash;
+    }
     
 }
