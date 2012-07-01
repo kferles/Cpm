@@ -7,10 +7,11 @@ package symbolTable.types;
 public abstract class Type {
     
     /**
-     * By default no type is neither const nor volatile.
+     * By default no type is not const, volatile or static.
      */
     protected boolean isConst = false,
-                    isVolatile = false;
+                      isVolatile = false,
+                      isStatic = false;
     
     protected abstract StringBuilder getString(StringBuilder aggr);
     
@@ -42,6 +43,13 @@ public abstract class Type {
      */
     public void setIsVolatile(){
         this.isVolatile = true;
+    }
+    
+    /**
+     * Declares that the type is static.
+     */
+    public void setIsStatic(){
+        this.isStatic = true;
     }
 
     /**
