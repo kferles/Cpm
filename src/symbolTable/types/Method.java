@@ -18,7 +18,7 @@ public class Method extends Type{
      * Auxiliary class describing the signature of a method.
      * Contains the return value and a list with the parameters.
      */
-    class Signature{
+    public class Signature{
 
         Type returnValue;
 
