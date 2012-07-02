@@ -1,6 +1,7 @@
 package symbolTable.types;
 
 import java.util.ArrayList;
+import symbolTable.DefinesNamespace;
 
 /**
  *
@@ -14,9 +15,9 @@ public class Method extends Type{
     }
     
     /**
-        * Auxiliary class describing the signature of a method.
-        * Contains the return value and a list with the parameters.
-        */
+     * Auxiliary class describing the signature of a method.
+     * Contains the return value and a list with the parameters.
+     */
     class Signature{
 
         Type returnValue;
@@ -64,10 +65,9 @@ public class Method extends Type{
     Signature s;
     
     boolean isVirtual,
-            isAbstract,
-            isConst;
+            isAbstract;
     
-    UserDefinedType belongsTo = null;
+    DefinesNamespace belongsTo = null;
     
     /**
      * Constructs a Method object given the type of the return value and
@@ -112,7 +112,7 @@ public class Method extends Type{
      * 
      * @param t The UserDefinedType class that represents method's type.
      */
-    public void setType(UserDefinedType t){
+    public void setType(DefinesNamespace t){
         this.belongsTo = t;
     }
     
