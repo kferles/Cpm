@@ -112,7 +112,7 @@ public class Method extends Type{
      * 
      * @param t The UserDefinedType class that represents method's type.
      */
-    public void setType(DefinesNamespace t){
+    public void setNamespace(DefinesNamespace t){
         this.belongsTo = t;
     }
     

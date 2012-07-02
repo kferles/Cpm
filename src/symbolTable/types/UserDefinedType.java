@@ -147,7 +147,7 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
             m1.put(m.s, new ClassContentElement<Method>(m, access, isStatic));
             methods.put(name, m1);
         }
-        m.setType(this);
+        m.setNamespace(this);
         return null;
     }
     
