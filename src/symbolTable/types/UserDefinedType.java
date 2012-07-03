@@ -91,12 +91,11 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      * @param t     A reference to the object that describes field 's type.
      * @return      null if the field is unique inside the Type and an ErrorMessage otherwise.
      */
-    public ErrorMessage insertField(String name, Type t, AccessSpecifier access, boolean isStatic){
+    public void insertField(String name, Type t, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
         if(fields == null) fields = new HashMap<String, ClassContentElement<Type>>();
         String key = name;      //think how to distinguish field that shadows fields of superclasses.
-        if(fields.containsKey(key)) return new ErrorMessage("");
+        if(fields.containsKey(key)) throw new ErrorMessage("");
         fields.put(key, new ClassContentElement<Type>(t, access, isStatic));
-        return null;
     }
     
     /**
@@ -106,25 +105,24 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      * @param t    A reference to the UserDefinedType object that describes the Type.
      * @return     null if this name is unique inside this scope.
      */
-    public ErrorMessage insertInnerType(String name, UserDefinedType t, AccessSpecifier access, boolean isStatic){
+    public void insertInnerType(String name, UserDefinedType t, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
         if(this.innerTypes == null) this.innerTypes = new HashMap<String, ClassContentElement<UserDefinedType>>();
-        if(name.equals(this.name) == true) return new ErrorMessage("");
+        if(name.equals(this.name) == true) throw new ErrorMessage("");
         String key = name;
         if(innerTypes.containsKey(key)){
             UserDefinedType t1 = innerTypes.get(key).element;
             if(t1.isAbstract == true){
                 innerTypes.put(key, new ClassContentElement<UserDefinedType>(t, access, isStatic));
-                return null;
+                return;
             }
             else if(t.isAbstract == false){
-                return new ErrorMessage("");
+                throw new ErrorMessage("");
             }
             else{
-                return null; //check this one with an example.
+                return; //check this one with an example.
             }
         }
         innerTypes.put(key, new ClassContentElement<UserDefinedType>(t, access, isStatic));
-        return null;
     }
     
     /**
@@ -134,12 +132,12 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      * @param m     A reference to the Method object that describes the method
      * @return      null if method can be inserted and an ErrorMessage if method cannot be overloaded.
      */
-    public ErrorMessage insertMethod(String name, Method m, AccessSpecifier access, boolean isStatic){
-        //TODO: check for methods in super classes and if a virtual method is being overriden make it virtual in this class as well.
+    public void insertMethod(String name, Method m, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
+        //TODO: check for methods in super classes and if a virtual method is being overriden make it virtual in this class as well. Also for access & (const, virtual, etc) specifiers in the same and super classes (for overriding).
         if(this.methods == null) this.methods = new HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>>();
         if(methods.containsKey(name)){
             HashMap<Method.Signature, ClassContentElement<Method>> m1 = methods.get(name);
-            if(m1.containsKey(m.s)) return new ErrorMessage("");
+            if(m1.containsKey(m.s)) throw new ErrorMessage("Hello");
             m1.put(m.s, new ClassContentElement<Method>(m, access, isStatic));
         }
         else{
@@ -148,7 +146,6 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
             methods.put(name, m1);
         }
         m.setNamespace(this);
-        return null;
     }
     
     @Override
