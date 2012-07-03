@@ -4,15 +4,10 @@ package errorHandling;
  *
  * @author kostas
  */
-public class ErrorMessage {
-    
-    private String msg;
+public class ErrorMessage extends Exception{
     
     public ErrorMessage(String msg){
-        this.msg = msg;
+        super(msg);
     }
     
-    public String getError(){
-        return this.msg;
-    }
 }
