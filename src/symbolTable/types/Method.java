@@ -133,6 +133,10 @@ public class Method extends Type{
     public Type getReturnType(){
         return s.returnValue;
     }
+    
+    public Signature getSignature(){
+        return this.s;
+    }
 
     @Override
     public int hashCode() {
