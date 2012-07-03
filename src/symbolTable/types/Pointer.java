@@ -87,7 +87,6 @@ public class Pointer extends Type{
 //        Method m = new Method(pp1, l, false, false, false);
 //        Pointer pm = new Pointer(m);
 //        Pointer ppm = new Pointer(pm);
-//        Method m1 = new Method(pm, l, false, false, false);
 //        Pointer pppm = new Pointer(m1);
 //        Pointer test = new Pointer(pppm);
 //        System.out.println(i);
