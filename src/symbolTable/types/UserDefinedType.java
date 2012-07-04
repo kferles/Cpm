@@ -13,6 +13,9 @@ import symbolTable.DefinesNamespace;
  */
 public class UserDefinedType extends SimpleType implements DefinesNamespace{
     //TODO: Decide error message, lines etc.
+    
+    HashMap<String, HashSet<ClassContentElement<? extends Type>>> allSymbols = new HashMap<String, HashSet<ClassContentElement<? extends Type>>>();
+    
     HashSet<UserDefinedType> superClasses = null;
     
     HashMap<String, ClassContentElement<Type>> fields = null;
@@ -30,6 +33,18 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
     
     boolean isAbstract;
     
+    private void insertInAllSymbols(String name, ClassContentElement<? extends Type> entry){
+        HashSet<ClassContentElement<? extends Type>> set;
+        if(allSymbols.containsKey(name) == true){
+            set = allSymbols.get(name);
+        }
+        else{
+            set = new HashSet<ClassContentElement<? extends Type>>();
+            allSymbols.put(name, set);
+        }
+        set.add(entry);
+    }
+    
     private class ClassContentElement <T>{
         T element;
         
@@ -41,6 +56,16 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
             this.element = element;
             this.access = access;
             this.isStatic = isStatic;
+        }
+        
+        @Override
+        public boolean equals(Object o){
+            return this.element.equals(o);
+        }
+
+        @Override
+        public int hashCode() {
+            return element.hashCode();
         }
     }
     
@@ -94,8 +119,11 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
     public void insertField(String name, Type t, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
         if(fields == null) fields = new HashMap<String, ClassContentElement<Type>>();
         String key = name;      //think how to distinguish field that shadows fields of superclasses.
-        if(fields.containsKey(key)) throw new ErrorMessage("");
-        fields.put(key, new ClassContentElement<Type>(t, access, isStatic));
+        if(allSymbols.containsKey(key) == true) throw new ErrorMessage("");
+        //if(fields.containsKey(key)) throw new ErrorMessage(""); //with allSymbols HashMap this is probably useless.
+        ClassContentElement<Type> field = new ClassContentElement<Type>(t, access, isStatic);
+        fields.put(key, field);
+        insertInAllSymbols(key, field);
     }
     
     /**
@@ -106,6 +134,7 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      * @return     null if this name is unique inside this scope.
      */
     public void insertInnerType(String name, UserDefinedType t, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
+        //TODO: according to the name of the new type and the existings names in allSymbos HashMap, which type names will be legal for C+- ?
         if(this.innerTypes == null) this.innerTypes = new HashMap<String, ClassContentElement<UserDefinedType>>();
         if(name.equals(this.name) == true) throw new ErrorMessage("");
         String key = name;
@@ -141,9 +170,12 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
             m1.put(m.s, new ClassContentElement<Method>(m, access, isStatic));
         }
         else{
+            if(allSymbols.containsKey(name) == true) throw new ErrorMessage("");
             HashMap<Method.Signature, ClassContentElement<Method>> m1 = new HashMap<Method.Signature, ClassContentElement<Method>>();
-            m1.put(m.s, new ClassContentElement<Method>(m, access, isStatic));
+            ClassContentElement<Method> method = new ClassContentElement<Method>(m, access, isStatic);
+            m1.put(m.s, method);
             methods.put(name, m1);
+            insertInAllSymbols(name, method);
         }
         m.setNamespace(this);
     }
