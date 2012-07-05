@@ -5,7 +5,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import symbolTable.DefinesNamespace;
 import symbolTable.types.Method;
+import symbolTable.types.Method.Signature;
 import symbolTable.types.Type;
+import symbolTable.types.UserDefinedType;
 
 /**
  *
@@ -20,6 +22,8 @@ public class Namespace implements DefinesNamespace{
     HashMap<String, HashMap<Method.Signature, Method>> methods = null;
     
     HashMap<String, Namespace> innerNamespaces = null;
+    
+    HashMap<String, UserDefinedType> innerTypes = null;
     
     private void insertInAllSymbols(String name, Type entry){
         HashSet<Type> set;
@@ -57,6 +61,22 @@ public class Namespace implements DefinesNamespace{
         }
     }
     
+    public void insertInnerType(String name, UserDefinedType t) throws ErrorMessage{
+        if(innerTypes == null) innerTypes = new HashMap<String, UserDefinedType>();
+        if(allSymbols.containsKey(name) == true || innerNamespaces.containsKey(name) == true) throw new ErrorMessage("");
+        if(innerTypes.containsKey(name) == true){
+            UserDefinedType t1 = innerTypes.get(name);
+            if(t1.isDefined() == false){
+                innerTypes.put(name, t);
+            }
+            else if(t.isDefined() == true){
+                throw new ErrorMessage("");
+            }
+            return; //check this here and in UserDefinedType class
+        }
+        innerTypes.put(name, t);
+    }
+    
     public void insertInnerNamespace(String name, Namespace namespace) throws ErrorMessage{
         if(innerNamespaces == null) innerNamespaces = new HashMap<String, Namespace>();
         if(!innerNamespaces.containsKey(name)){
@@ -84,6 +104,39 @@ public class Namespace implements DefinesNamespace{
                 Namespace n = namespace.innerNamespaces.get(key);
                 exists.insertInnerNamespace(key, n);
             }
+            for(String key : namespace.innerTypes.keySet()){
+                UserDefinedType t = namespace.innerTypes.get(key);
+                exists.insertInnerType(name, t);
+            }
         }
+    }
+
+    /*
+     * DefinesNamespace methods
+     */
+    
+    @Override
+    public Type findSymbol(String name) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Type findSymbol(String name, DefinesNamespace fromNamespace) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public DefinesNamespace findNamespace(String name) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Method findMethod(String name, Signature s) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Type findField(String name) {
+        throw new UnsupportedOperationException("Not supported yet.");
     }
 }
