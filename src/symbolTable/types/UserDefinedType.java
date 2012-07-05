@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import symbolTable.DefinesNamespace;
+import symbolTable.types.Method.Signature;
 
 /**
  *
@@ -31,7 +32,7 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
     
     DefinesNamespace belongsTo;
     
-    boolean isAbstract;
+    boolean isDefined;
     
     private void insertInAllSymbols(String name, ClassContentElement<? extends Type> entry){
         HashSet<ClassContentElement<? extends Type>> set;
@@ -79,12 +80,12 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      * Constructs a UserDefinedType according to its name.
      * 
      * @param name Type's name.
-     * @param isAbstract  whether the type is yet implemented or not.
+     * @param isDefined  whether the type is yet implemented or not.
      * @param belongsTo   The namespace that the type belongs to (either a class or a namespace).
      */
-    public UserDefinedType(String name, DefinesNamespace belongsTo, boolean isAbstract){
+    public UserDefinedType(String name, DefinesNamespace belongsTo, boolean isDefined){
         super(name);
-        this.isAbstract = isAbstract;
+        this.isDefined = isDefined;
         this.belongsTo = belongsTo;
     }
     
@@ -106,6 +107,7 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
              * also handle methods, fields and inner types.
              */
             superClasses.add(s);
+        this.isDefined = true;
         this.belongsTo = belongsTo;
     }
     
@@ -140,11 +142,11 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
         String key = name;
         if(innerTypes.containsKey(key)){
             UserDefinedType t1 = innerTypes.get(key).element;
-            if(t1.isAbstract == true){
+            if(t1.isDefined == false){
                 innerTypes.put(key, new ClassContentElement<UserDefinedType>(t, access, isStatic));
                 return;
             }
-            else if(t.isAbstract == false){
+            else if(t.isDefined == true){
                 throw new ErrorMessage("");
             }
             else{
@@ -199,7 +201,7 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
         hash = 71 * hash + (this.innerTypes != null ? this.innerTypes.hashCode() : 0);
         hash = 71 * hash + (this.methods != null ? this.methods.hashCode() : 0);
         hash = 71 * hash + (this.belongsTo != null ? this.belongsTo.hashCode() : 0);
-        hash = 71 * hash + (this.isAbstract ? 1 : 0);
+        hash = 71 * hash + (this.isDefined ? 1 : 0);
         return hash + 71*super.hashCode();              //super's hashcode added for field name ...
     }
 
@@ -216,6 +218,39 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
             return false;
         }
         return false;
+    }
+    
+    public boolean isDefined(){
+        return this.isDefined;
+    }
+    
+    /*
+     * DefinesNamespace Methods
+     */
+    
+    @Override
+    public Type findSymbol(String name) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Type findSymbol(String name, DefinesNamespace fromNamespace) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public DefinesNamespace findNamespace(String name) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Method findMethod(String name, Signature s) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Type findField(String name) {
+        throw new UnsupportedOperationException("Not supported yet.");
     }
     
 }
