@@ -1,5 +1,6 @@
 package symbolTable.types;
 
+import errorHandling.ErrorMessage;
 import java.util.ArrayList;
 
 /**
@@ -66,55 +67,23 @@ public class Pointer extends Type{
         hash = 83 * hash + (this.pointsTo != null ? this.pointsTo.hashCode() : 0);
         return hash;
     }
-    
-    
-//    public static void main(String[] args){
-//        PrimitiveType i = new PrimitiveType("int");
-//        
-//        PrimitiveType d = new PrimitiveType("double");
-//        
-//        Pointer p = new Pointer(i);
-//        
-//        Pointer p1 = new Pointer(d);
-//        
-//        Pointer pp = new Pointer(p);
-//        
-//        Pointer pp1 = new Pointer(p1);
-//        
-//        ArrayList<Type> l = new ArrayList<Type>();
-//        l.add(p);
-//        l.add(p1);
-//        Method m = new Method(pp1, l, false, false, false);
-//        Pointer pm = new Pointer(m);
-//        Pointer ppm = new Pointer(pm);
-//        Pointer pppm = new Pointer(m1);
-//        Pointer test = new Pointer(pppm);
-//        System.out.println(i);
-//        System.out.println(d);
-//        System.out.println(pp);
-//        System.out.println(pp1);
-//        System.out.println(p);
-//        System.out.println(p1);
-//        System.out.println(m);
-//        System.out.println(pm);
-//        System.out.println(ppm);
-//        System.out.println(m1);
-//        System.out.println(pppm);
-//        System.out.println(test);
-//        
-//        Method m3 = new Method(pppm, l, false, false, false);
-//        Pointer p3 = new Pointer(m3);
-//        System.out.println("M3 = " + m3);
-//        System.out.println(p3);
-//    }
 
     @Override
-    public boolean subType(Type o) {
+    public boolean subType(Type o) throws ErrorMessage {
         if(o == null) return false;
         if(o instanceof Pointer){
-            if(super.equals((Type) o) == false) return false;
+            if(super.equals((Type) o) == false) return false;   //check this one from standard for cv-qualifiers
             Pointer p = (Pointer) o;
-            return this.pointsTo.subType(p.pointsTo);
+            if(this.pointsTo instanceof UserDefinedType && p.pointsTo instanceof UserDefinedType){
+                /*
+                 * special case: A* <: B* only if B is an unambiguous base class of A.
+                 *               multiple level of pointers are not allowed.
+                 */
+                if(super.equals(o) == false) return false; //check cv-qualifiers for pointers to be indentical
+                UserDefinedType t1 = (UserDefinedType) this.pointsTo, t2 = (UserDefinedType) p.pointsTo;
+                return t1.isCovariantWith(t2);
+            }
+            return this.pointsTo.equals(p.pointsTo);
         }
         return false;
     }
