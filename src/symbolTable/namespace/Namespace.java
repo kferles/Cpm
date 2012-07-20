@@ -25,6 +25,8 @@ public class Namespace implements DefinesNamespace{
     
     HashMap<String, UserDefinedType> innerTypes = null;
     
+    HashSet<String> visibleTypeNames = null;
+
     private void insertInAllSymbols(String name, Type entry){
         HashSet<Type> set;
         if(allSymbols.containsKey(name) == true){
@@ -37,16 +39,22 @@ public class Namespace implements DefinesNamespace{
         set.add(entry);
     }
     
+    public void setVisibleTypeNames(HashSet<String> set){
+        this.visibleTypeNames = new HashSet<String>(set);
+    }
+    
     public void insertField(String name, Type t) throws ErrorMessage{
         if(fields == null) fields = new HashMap<String, Type>();
+        if(fields.containsKey(name)) throw new ErrorMessage("");
         if(allSymbols.containsKey(name) == true || innerNamespaces.containsKey(name)) throw new ErrorMessage("");
-        //if(fields.containsKey(name)) throw new ErrorMessage(""); //probably useless
+        if(this.visibleTypeNames.contains(name) == true) throw new ErrorMessage("");
         fields.put(name, t);
         insertInAllSymbols(name, t);
     }
     
     public void insertMethod(String name, Method m) throws ErrorMessage{
         if(methods == null) methods = new HashMap<String, HashMap<Method.Signature, Method>>();
+        if(this.visibleTypeNames.contains(name) == true) throw new ErrorMessage("");
         if(methods.containsKey(name) == true){
             HashMap<Method.Signature, Method> ms = methods.get(name);
             if(ms.containsKey(m.getSignature())) throw new ErrorMessage("");
@@ -74,12 +82,17 @@ public class Namespace implements DefinesNamespace{
             }
             return; //check this here and in UserDefinedType class
         }
+        this.visibleTypeNames.add(name);
+        t.setVisibleTypeNames(this.visibleTypeNames);
         innerTypes.put(name, t);
     }
     
     public void insertInnerNamespace(String name, Namespace namespace) throws ErrorMessage{
         if(innerNamespaces == null) innerNamespaces = new HashMap<String, Namespace>();
+        if(this.allSymbols.containsKey(name) == true) throw new ErrorMessage("");
+        if(this.innerTypes.containsKey(name) == true) throw new ErrorMessage("");
         if(!innerNamespaces.containsKey(name)){
+            namespace.setVisibleTypeNames(this.visibleTypeNames);
             innerNamespaces.put(name, namespace);
         }
         else{
@@ -87,26 +100,34 @@ public class Namespace implements DefinesNamespace{
              * merging the existing namespace with the extension declaration.
              */
             Namespace exists = innerNamespaces.get(name);
-            for(String key : namespace.fields.keySet()){
-                Type t = namespace.fields.get(key);
-                exists.insertField(name, t);
-            }
-            for(String key : namespace.methods.keySet()){
-                HashMap<Method.Signature, Method> ms = namespace.methods.get(key);
-                for(Method m : ms.values()){
-                    exists.insertMethod(key, m);
+            if(namespace.fields != null){
+                for(String key : namespace.fields.keySet()){
+                    Type t = namespace.fields.get(key);
+                    exists.insertField(name, t);
                 }
             }
-            for(String key : namespace.innerNamespaces.keySet()){
-                /*
-                 * merge again all the inner namespaces.
-                 */
-                Namespace n = namespace.innerNamespaces.get(key);
-                exists.insertInnerNamespace(key, n);
+            if(namespace.methods != null){
+                for(String key : namespace.methods.keySet()){
+                    HashMap<Method.Signature, Method> ms = namespace.methods.get(key);
+                    for(Method m : ms.values()){
+                        exists.insertMethod(key, m);
+                    }
+                }
             }
-            for(String key : namespace.innerTypes.keySet()){
-                UserDefinedType t = namespace.innerTypes.get(key);
-                exists.insertInnerType(name, t);
+            if(namespace.innerNamespaces != null){
+                for(String key : namespace.innerNamespaces.keySet()){
+                    /*
+                    * merge again all the inner namespaces.
+                    */
+                    Namespace n = namespace.innerNamespaces.get(key);
+                    exists.insertInnerNamespace(key, n);
+                }
+            }
+            if(namespace.innerTypes != null){
+                for(String key : namespace.innerTypes.keySet()){
+                    UserDefinedType t = namespace.innerTypes.get(key);
+                    exists.insertInnerType(name, t);
+                }
             }
         }
     }
