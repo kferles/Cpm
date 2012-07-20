@@ -1,5 +1,6 @@
 package symbolTable.types;
 
+import errorHandling.ErrorMessage;
 import java.util.ArrayList;
 import symbolTable.DefinesNamespace;
 
@@ -143,6 +144,11 @@ public class Method extends Type{
         int hash = 7;
         hash = 17 * hash + (this.s != null ? this.s.hashCode() : 0);
         return hash;
+    }
+    
+    public boolean isOverriderFor(Method m) throws ErrorMessage{
+        boolean subtype = this.s.returnValue.subType(m.s.returnValue);
+        return subtype;
     }
     
 }
