@@ -4,7 +4,6 @@ import errorHandling.ErrorMessage;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import symbolTable.DefinesNamespace;
 import symbolTable.types.Method.Signature;
 
@@ -30,9 +29,39 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      */
     HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>> methods = null;
     
+    HashSet<String> visibleTypeNames = null;
+    
     DefinesNamespace belongsTo;
     
     boolean isDefined;
+    
+    private boolean isOverrider(String name, Method m) throws ErrorMessage{
+        if(this.superClasses == null) return false;
+        HashSet<Method> methodsInSuper = new HashSet<Method>();
+        collectVirtualsInBases(name, m, new HashSet<UserDefinedType>(), methodsInSuper);
+        for(Method method : methodsInSuper){
+            if(m.isOverriderFor(method) == false) throw new ErrorMessage("");
+        }
+        return true;
+    }
+    
+    private void collectVirtualsInBases(String name, Method m, HashSet<UserDefinedType> visited, HashSet<Method> res){
+        if(visited.contains(this) == true) return;
+        visited.add(this);
+        if(this.methods != null && this.methods.containsKey(name) == true){
+            HashMap<Method.Signature, ClassContentElement<Method>> ms = this.methods.get(name);
+            ClassContentElement<Method> supermElem = ms.get(m.getSignature());
+            if(supermElem != null){
+                Method superm = supermElem.element;
+                if(superm.isVirtual) res.add(superm);
+            }
+        }
+        if(this.superClasses != null){
+            for(UserDefinedType t : this.superClasses){
+                t.collectVirtualsInBases(name, m, visited, res);
+            }
+        }
+    }
     
     private void insertInAllSymbols(String name, ClassContentElement<? extends Type> entry){
         HashSet<ClassContentElement<? extends Type>> set;
@@ -44,6 +73,28 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
             allSymbols.put(name, set);
         }
         set.add(entry);
+    }
+    
+    private int searchSuperType(UserDefinedType t){
+        int count = 0;
+        if(this.superClasses.contains(t) == true) ++count;
+        if(this.superClasses != null){
+            for(UserDefinedType ut : this.superClasses){
+                if(ut.equals(t) == false) count += ut.searchSuperType(t);
+            }
+        }
+        return count;
+    }
+    
+    private void addInnerTypesToVisible(HashSet<String> set, HashSet<UserDefinedType> visited){
+        if(visited.contains(this) == true) return;
+        visited.add(this);
+        if(this.innerTypes != null){
+            for(String key : this.innerTypes.keySet()) set.add(key);
+        }
+        if(this.superClasses != null){
+            for(UserDefinedType t : this.superClasses) t.addInnerTypesToVisible(set, visited);
+        }
     }
     
     private class ClassContentElement <T>{
@@ -109,6 +160,13 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
             superClasses.add(s);
         this.isDefined = true;
         this.belongsTo = belongsTo;
+        this.visibleTypeNames = new HashSet<String>();
+        this.addInnerTypesToVisible(visibleTypeNames, new HashSet<UserDefinedType>());
+    }
+    
+    public void setVisibleTypeNames(HashSet<String> set){
+        if(this.visibleTypeNames == null) this.visibleTypeNames = new HashSet<String>(set);
+        for(String type : set) this.visibleTypeNames.add(type);
     }
     
     /**
@@ -121,8 +179,9 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
     public void insertField(String name, Type t, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
         if(fields == null) fields = new HashMap<String, ClassContentElement<Type>>();
         String key = name;      //think how to distinguish field that shadows fields of superclasses.
+        if(fields.containsKey(key)) throw new ErrorMessage("");
         if(allSymbols.containsKey(key) == true) throw new ErrorMessage("");
-        //if(fields.containsKey(key)) throw new ErrorMessage(""); //with allSymbols HashMap this is probably useless.
+        if(visibleTypeNames.contains(name) == true) throw new ErrorMessage("");
         ClassContentElement<Type> field = new ClassContentElement<Type>(t, access, isStatic);
         fields.put(key, field);
         insertInAllSymbols(key, field);
@@ -136,11 +195,14 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      * @return     null if this name is unique inside this scope.
      */
     public void insertInnerType(String name, UserDefinedType t, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
-        //TODO: according to the name of the new type and the existings names in allSymbos HashMap, which type names will be legal for C+- ?
         if(this.innerTypes == null) this.innerTypes = new HashMap<String, ClassContentElement<UserDefinedType>>();
         if(name.equals(this.name) == true) throw new ErrorMessage("");
+        if(allSymbols.containsKey(name) == true) throw new ErrorMessage("");
         String key = name;
         if(innerTypes.containsKey(key)){
+            /*
+             * check only if there is another inner type it the same namespace.
+             */
             UserDefinedType t1 = innerTypes.get(key).element;
             if(t1.isDefined == false){
                 innerTypes.put(key, new ClassContentElement<UserDefinedType>(t, access, isStatic));
@@ -153,6 +215,8 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
                 return; //check this one with an example.
             }
         }
+        this.visibleTypeNames.add(name);
+        t.setVisibleTypeNames(this.visibleTypeNames);
         innerTypes.put(key, new ClassContentElement<UserDefinedType>(t, access, isStatic));
     }
     
@@ -164,17 +228,19 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
      * @return      null if method can be inserted and an ErrorMessage if method cannot be overloaded.
      */
     public void insertMethod(String name, Method m, AccessSpecifier access, boolean isStatic) throws ErrorMessage{
-        //TODO: check for methods in super classes and if a virtual method is being overriden make it virtual in this class as well. Also for access & (const, virtual, etc) specifiers in the same and super classes (for overriding).
         if(this.methods == null) this.methods = new HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>>();
+        if(this.visibleTypeNames.contains(name) == true) throw new ErrorMessage("");
         if(methods.containsKey(name)){
             HashMap<Method.Signature, ClassContentElement<Method>> m1 = methods.get(name);
-            if(m1.containsKey(m.s)) throw new ErrorMessage("Hello");
+            if(m1.containsKey(m.s)) throw new ErrorMessage("");
+            if(isOverrider(name, m) == true) m.isVirtual = true;
             m1.put(m.s, new ClassContentElement<Method>(m, access, isStatic));
         }
         else{
             if(allSymbols.containsKey(name) == true) throw new ErrorMessage("");
             HashMap<Method.Signature, ClassContentElement<Method>> m1 = new HashMap<Method.Signature, ClassContentElement<Method>>();
             ClassContentElement<Method> method = new ClassContentElement<Method>(m, access, isStatic);
+            if(isOverrider(name, m) == true) m.isVirtual = true;
             m1.put(m.s, method);
             methods.put(name, m1);
             insertInAllSymbols(name, method);
@@ -206,18 +272,39 @@ public class UserDefinedType extends SimpleType implements DefinesNamespace{
     }
 
     @Override
-    public boolean subType(Type o) {
+    public boolean subType(Type o) throws ErrorMessage{
         if(o == null) return false;
         if(o instanceof UserDefinedType){
             UserDefinedType ut = (UserDefinedType) o;
-            if(superClasses.contains(ut) || ut.equals(this)) return true;
-            for(Iterator<UserDefinedType> it = superClasses.iterator() ; it.hasNext() ; ){
-                UserDefinedType t = it.next();
-                if(this.subType(t)) return true;
-            }
-            return false;
+            return ut.equals(this);
+//            if(superClasses.contains(ut) || ut.equals(this)) return true;
+//            for(Iterator<UserDefinedType> it = superClasses.iterator() ; it.hasNext() ; ){
+//                UserDefinedType t = it.next();
+//                if(t.subType(ut)) return true;
+//            }
+//            return false;
         }
         return false;
+    }
+    
+    public boolean isCovariantWith(UserDefinedType t) throws ErrorMessage {
+        if(t == null) return false;
+        /*
+         * checking cv-qualifiers for class type according to C++ standard.
+         */
+        if(super.equals(t) == false){
+            if(this.isConst == true || this.isVolatile == true){
+                if(t.isConst == false && t.isVolatile == false) return false;
+            }
+            if(this.isConst == true && this.isVolatile == true){
+                if(t.isConst == false || t.isVolatile == false) return false;
+            }
+        }
+        if(t.equals(this) == true) return true;
+        int baseClassCount = searchSuperType(t);
+        if(baseClassCount > 1) throw new ErrorMessage("");  //base class is ambiguous
+        if(baseClassCount == 1) return true;
+        return false;                                       //types are not converiant
     }
     
     public boolean isDefined(){
