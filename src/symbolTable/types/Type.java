@@ -1,5 +1,7 @@
 package symbolTable.types;
 
+import errorHandling.ErrorMessage;
+
 /**
  * Abstract class representing a Type in C+- language.
  * @author kostas
@@ -19,7 +21,8 @@ public abstract class Type {
      * @param o The other type.
      * @return True if this <: o and false otherwise.
      */
-    public abstract boolean subType(Type o);
+    public abstract boolean subType(Type o) throws ErrorMessage;
+
     /**
      * Returns a string of the type similar to g++ representation of types (mostly from the error messages).
      * @return A string that represents the type.
