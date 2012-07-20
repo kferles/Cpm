@@ -64,25 +64,31 @@ public class PrimitiveType extends SimpleType {
     }
 
     @Override
-    public boolean subType(Type o) {
-        if(o == null) return false;
-        if(o instanceof PrimitiveType){
-            PrimitiveType p = (PrimitiveType) o;
-            /*
-             * according to Cpm design conversion from a const to a non const type is not allowed.
-             */
-            if(super.isConst == true && p.isConst == false) return false;
-            /*
-             * subtyping for integer like types according to Cpm design.
-             */
-            if(this._type == p._type && this.index <= p.index) return true;
-            if(this._type == PrimitiveType.signedInts && p._type == PrimitiveType.doubles){
-                if(this.name.equals("long long") && !p.name.equals("long double")) return false;
-                return true;
-            }
-            return false;
-        }
-        else return false;
+    public boolean subType(Type o){
+        return this.equals(o);
     }
+    
+
+//      this one when this can be assigned to an other type   
+//    {
+//        if(o == null) return false;
+//        if(o instanceof PrimitiveType){
+//            PrimitiveType p = (PrimitiveType) o;
+//            /*
+//             * according to Cpm design conversion from a const to a non const type is not allowed.
+//             */
+//            if(super.isConst == true && p.isConst == false) return false;
+//            /*
+//             * subtyping for integer like types according to Cpm design.
+//             */
+//            if(this._type == p._type && this.index <= p.index) return true;
+//            if(this._type == PrimitiveType.signedInts && p._type == PrimitiveType.doubles){
+//                if(this.name.equals("long long") && !p.name.equals("long double")) return false;
+//                return true;
+//            }
+//            return false;
+//        }
+//        else return false;
+//    }
 
 }
