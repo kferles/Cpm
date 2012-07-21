@@ -39,8 +39,10 @@ public class PrimitiveType extends SimpleType {
         }
     }
     
-    public PrimitiveType(String name){
+    public PrimitiveType(String name, boolean isConst, boolean isVolatile){
         super(name);
+        this.isConst = isConst;
+        this.isVolatile = isVolatile;
         if(name.equals("short int")) name = "short";
         else if(name.equals("long int")) name = "long";
         else if(name.equals("long long int")) name = "long long";
