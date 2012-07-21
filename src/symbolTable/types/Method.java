@@ -2,7 +2,7 @@ package symbolTable.types;
 
 import errorHandling.ErrorMessage;
 import java.util.ArrayList;
-import symbolTable.DefinesNamespace;
+import symbolTable.namespace.DefinesNamespace;
 
 /**
  *
@@ -68,6 +68,10 @@ public class Method extends Type{
     boolean isVirtual,
             isAbstract;
     
+    
+    /*
+     * probably out of here. 
+     */
     DefinesNamespace belongsTo = null;
     
     /**
@@ -102,6 +106,9 @@ public class Method extends Type{
             Method m = (Method)o;
             if(this.s.equals(m.s) == false) return false;
             if(this.s.returnValue.equals(m.s.returnValue) == false) return false;
+            if(this.isAbstract != m.isAbstract) return false;
+            if(this.isVirtual != m.isVirtual) return false;
+            if(this.isConst != m.isConst) return false;
             return true;
         }
         return false;
@@ -137,6 +144,14 @@ public class Method extends Type{
     
     public Signature getSignature(){
         return this.s;
+    }
+    
+    public boolean isVirtual(){
+        return isVirtual;
+    }
+    
+    public void setVirtual(){
+        isVirtual = true;
     }
 
     @Override
