@@ -16,7 +16,7 @@ public abstract class SimpleType extends Type {
     public boolean equals(Object o){
         if(o == null) return false;
         if(o instanceof SimpleType){
-            if(super.equals((Type) o) == false) return false;
+            if(super.equals(o) == false) return false;
             SimpleType st = (SimpleType) o;
             return this.name.equals(st.name);
         }
