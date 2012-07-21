@@ -71,7 +71,10 @@ public abstract class Type {
     @Override
     public int hashCode() {
         int hash = 7;
+        hash = 71 * hash + (this.isConst ? 1 : 0);
+        hash = 71 * hash + (this.isVolatile ? 1 : 0);
         return hash;
     }
+
     
 }
