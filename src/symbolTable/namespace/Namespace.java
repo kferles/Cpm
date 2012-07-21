@@ -3,17 +3,17 @@ package symbolTable.namespace;
 import errorHandling.ErrorMessage;
 import java.util.HashMap;
 import java.util.HashSet;
-import symbolTable.DefinesNamespace;
 import symbolTable.types.Method;
 import symbolTable.types.Method.Signature;
 import symbolTable.types.Type;
-import symbolTable.types.UserDefinedType;
 
 /**
  *
  * @author kostas
  */
 public class Namespace implements DefinesNamespace{
+    
+    String name;
     
     HashMap<String, HashSet<Type>> allSymbols = new HashMap<String, HashSet<Type>>();
     
@@ -23,9 +23,17 @@ public class Namespace implements DefinesNamespace{
     
     HashMap<String, Namespace> innerNamespaces = null;
     
-    HashMap<String, UserDefinedType> innerTypes = null;
+    HashMap<String, Class> innerTypes = null;
     
     HashSet<String> visibleTypeNames = null;
+    
+    Namespace belongsTo;
+    
+    @Override
+    public StringBuilder getStringName(StringBuilder in){
+        if(belongsTo == null) return in.append(name);
+        return belongsTo.getStringName(in).append("::").append(name);
+    }
 
     private void insertInAllSymbols(String name, Type entry){
         HashSet<Type> set;
@@ -37,6 +45,11 @@ public class Namespace implements DefinesNamespace{
             allSymbols.put(name, set);
         }
         set.add(entry);
+    }
+    
+    public Namespace(String name, Namespace belongsTo){
+        this.name = name;
+        this.belongsTo = belongsTo;
     }
     
     public void setVisibleTypeNames(HashSet<String> set){
@@ -69,15 +82,15 @@ public class Namespace implements DefinesNamespace{
         }
     }
     
-    public void insertInnerType(String name, UserDefinedType t) throws ErrorMessage{
-        if(innerTypes == null) innerTypes = new HashMap<String, UserDefinedType>();
+    public void insertInnerType(String name, Class t) throws ErrorMessage{
+        if(innerTypes == null) innerTypes = new HashMap<String, Class>();
         if(allSymbols.containsKey(name) == true || innerNamespaces.containsKey(name) == true) throw new ErrorMessage("");
         if(innerTypes.containsKey(name) == true){
-            UserDefinedType t1 = innerTypes.get(name);
-            if(t1.isDefined() == false){
+            Class t1 = innerTypes.get(name);
+            if(t1.isComplete() == false){
                 innerTypes.put(name, t);
             }
-            else if(t.isDefined() == true){
+            else if(t.isComplete() == true){
                 throw new ErrorMessage("");
             }
             return; //check this here and in UserDefinedType class
@@ -125,11 +138,16 @@ public class Namespace implements DefinesNamespace{
             }
             if(namespace.innerTypes != null){
                 for(String key : namespace.innerTypes.keySet()){
-                    UserDefinedType t = namespace.innerTypes.get(key);
+                    Class t = namespace.innerTypes.get(key);
                     exists.insertInnerType(name, t);
                 }
             }
         }
+    }
+    
+    @Override
+    public String toString(){
+        return this.getStringName(new StringBuilder()).toString();
     }
 
     /*
