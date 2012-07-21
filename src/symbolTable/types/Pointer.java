@@ -11,8 +11,10 @@ public class Pointer extends Type{
     
     Type pointsTo;
     
-    public Pointer(Type pointsTo){
+    public Pointer(Type pointsTo, boolean isConst, boolean isVolatile){
         this.pointsTo = pointsTo;
+        this.isConst = isConst;
+        this.isVolatile = isVolatile;
     }
     
     @Override
@@ -54,7 +56,7 @@ public class Pointer extends Type{
     public boolean equals(Object o){
         if(o == null) return false;
         if(o instanceof Pointer){
-            if(super.equals((Type) o) == false) return false;
+            if(super.equals(o) == false) return false;
             Pointer p = (Pointer) o;
             return this.pointsTo.equals(p.pointsTo);
         }
