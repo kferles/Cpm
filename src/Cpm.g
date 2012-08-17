@@ -9,8 +9,7 @@ version of the ANSI C standard.  Tom Stockfisch reposted it to net.sources in
 1987; that original, as mentioned in the answer to question 17.25 of the
 comp.lang.c FAQ, can be ftp'ed from ftp.uu.net,
    file usenet/net.sources/ansi.c.grammar.Z.
-I intend to keep this version as close to the current C Standard grammar as
-possible; please let me know if you discover discrepancies. Jutta Degener, 1995"
+I intend to keep this version as cu discover discrepancies. Jutta Degener, 1995"
 
 Generally speaking, you need symbol table info to parse C; typedefs
 define types and then IDENTIFIERS are either types or plain IDs.  I'm doing
@@ -19,7 +18,8 @@ of the global scope (called Symbols).  Every rule that declares its usage
 of Symbols pushes a new copy on the stack effectively creating a new
 symbol scope.  Also note rule declaration declares a rule scope that
 lets any invoked rule see isTypedef boolean.  It's much easier than
-passing that info down as parameters.  Very clean.  Rule
+passing that info down as parameters.  Very lose to the current C Standard grammar as
+possible; please let me know if yoclean.  Rule
 direct_declarator can then easily determine whether the IDENTIFIER
 should be declared as a type name.
 
@@ -38,37 +38,24 @@ options {
     output=AST;
 }
 
-
-tokens{
-	DECLARATION;
-	DECL_SPEC;
-	STORAGE_CLASS_SPEC;
-	TYPE_QUAL;
-	TYPE_SPEC;
-	NESTED_ID_GLOBAL;
-	NESTED_ID;
-	POINTER_DECL;
-	POINTER;
-	P_DECLARATOR;
-	DECLARATOR;
-	DECL_SUF;
-	ARRAY_CONST_DECL;
-	ARRAY_DECL;
-	PARAM_LIST;
-	QUAL_POINTER;
-	PARAM;
-	P_ABS_DECLARATOR;
-	ABS_DECLARATOR;
+scope Type_Spec{
+	boolean error_for_signed, error_for_unsigned;
+	boolean type[];
+	PrimitiveTypeCheck counters;
 }
 
-scope Class{
-	boolean inClass;
-	String className;
-	boolean isVirtual;
-	boolean isTypedef;
-	boolean isPureVirtual;
-	String token3;
-	ArrayList<Types> superClasses;
+scope cv_qual{
+	boolean error_for_const, error_for_volatile;
+	int constCount;
+	int volatileCount;
+}
+
+scope storage_class_spec{
+	boolean error_found;
+	int externCount;
+	int staticCount;
+	int autoCount;
+	int registerCount;
 }
 
 @header {
@@ -76,84 +63,107 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.List;
-import types.Types;
+import java.util.Stack;
+import symbolTable.types.*;
 }
 
 @members {
+	//error messages
 	Stack paraphrases = new Stack();
-	int access = 4;
-	Types global = new Types("", null, access);
-	Types current_scope = global;
-	HashSet<String> NameSpaces = new HashSet<String>();
+	
+	public void displayRecognitionError(String[] tokenNames, RecognitionException e) {
+		//Change line number in error reporting HERE !!!!
+		//e.line++;
+		super.displayRecognitionError(tokenNames, e);
+        }
 	
 	public String getErrorMessage(RecognitionException e, String[] tokenNames){
-		/*if(paraphrases.size() > 0){
+		//e.token.setLine(e.token.getLine()+1);
+		if(paraphrases.size() > 0){
 			String rv = "";
 			for(Object o : paraphrases)
 				rv += (String) o;
 			paraphrases.clear();
 			return rv;
-		}*/
+		}
 		return super.getErrorMessage(e, tokenNames);
 	}
-
-	/*boolean isTypeName(String name) {
-		for (int i = Symbols_stack.size()-1; i>=0; i--) {
-			Symbols_scope scope = (Symbols_scope)Symbols_stack.get(i);
-			if ( scope.types.contains(name) ) {
-				return true;
-			}
-		}
-		return false;
-	}*/
 	
-	boolean className(String name){
-		Class_scope s = (Class_scope)Class_stack.get(Class_stack.size()-1);
-		/*System.out.println("..."+name);
-		System.out.println(s);
-		System.out.println(s.inClass);
-		System.out.println(s.className);*/
-		return s.className.equals(name);
+	private Object error(String msg){
+		paraphrases.push(msg);
+		//throw new RecognitionException();
+		return null;
 	}
 	
-	Types getTypeName(ArrayList<String> types, boolean from_global){	//System.out.println(types.contains(name) + " " + name);
-		Types curr;
-		String accessing_scope = current_scope.getName();
-		int backtrack = state.backtracking;
-		if(from_global){
-			curr = global.getNestedType(types.get(0), accessing_scope, backtrack, paraphrases);
-			if(curr == null) return null;
-		}
-		else{
-			curr = current_scope.getNestedType(types.get(0), accessing_scope, backtrack, paraphrases);
-			if(curr == null) curr = global.getNestedType(types.get(0), accessing_scope, backtrack, paraphrases);
-			if(curr == null) return null;
-		}
-		for(int i = 1 ; i < types.size() ; ++i){
-			Types tmp = curr.getNestedType(types.get(i), accessing_scope, backtrack, paraphrases);
-			if(tmp == null) return null;
-			curr = tmp;
-		}
-		//Thread.dumpStack();
-		//System.out.println(name);
-		/*System.out.println("Types");
-		for(String t : Alltypes) System.out.println(t);*/
-		return curr;
-	}
-	
-	boolean isTypeName(ArrayList<String> types, boolean from_global){
-		//if(types.size() == 0) return false;
-		return getTypeName(types, from_global) != null;
-	}
-	
-	boolean isNameSpace(String name){
-		return NameSpaces.contains(name);
-	}
-	
-	boolean isTemplateType(String name){
-		if(name.equals("list")) return true;
+	private boolean direct_declarator_error(String declarator, String error){
+		if(error == null) return true;
+		error += " '" + declarator + '\'';
+		paraphrases.push(error);
 		return false;
 	}
+	
+	private boolean const_count_error(){
+		cv_qual_scope cv_quals = get_cv_qual_scope();
+		if(cv_quals.error_for_const == true) return true;
+		if(cv_quals.constCount > 1){
+			cv_quals.error_for_const = true;
+			paraphrases.push("error: duplicate 'const'");
+			return false;
+		}
+		return true;
+	}
+	
+	private boolean volatile_count_error(){
+		cv_qual_scope cv_quals = get_cv_qual_scope();
+		if(cv_quals.error_for_volatile == true) return true;
+		if(cv_quals.volatileCount > 1){
+			cv_quals.error_for_volatile = true;
+			paraphrases.push("error: duplicate 'volatile'");
+			return false;
+		}
+		return true;
+	}
+	
+	private boolean storage_class_specs_error(){
+		storage_class_spec_scope specs = get_storage_class_spec();
+		if(specs.error_found == true) return true;
+		if(specs.externCount
+		   + specs.staticCount
+		   + specs.autoCount
+		   + specs.registerCount > 1){
+		
+			specs.error_found = true;
+			paraphrases.push("error: conflicting or duplicated storage class specifiers");
+		  	return false;
+		}
+		return true;
+	}
+	
+	private boolean signed_count_error(){
+		Type_Spec_scope specs = get_Type_Spec_scope();
+		if(specs.error_for_signed == true) return true;
+		if(specs.counters.signedCount > 1){
+			specs.error_for_signed = true;
+			paraphrases.push("error: duplicate 'signed'");
+			return false;
+		}
+		return true;
+	}
+	
+	private boolean unsigned_count_error(){
+		Type_Spec_scope specs = get_Type_Spec_scope();
+		if(specs.error_for_unsigned == true) return true;
+		if(specs.counters.unsignedCount > 1){
+			specs.error_for_unsigned = true;
+			paraphrases.push("error: duplicate 'unsigned'");
+			return false;
+		}
+		return true;
+	}
+	
+	//end error messages
+	
+	//AST construction
 	
 	Tree getChildren(CommonTree t){
 		List l = t.getChildren();
@@ -169,30 +179,180 @@ import types.Types;
 			for(Object o : nodes) rv.addChild((CommonTree)o);
 		return rv;
 	}
+	
+	//end AST construction
+	
+	//Scopes
+	
+	//Type_Spec scope
+	private class PrimitiveTypeCheck{
+		int voidCount = 0,
+		    charCount = 0,
+		    shortCount = 0,
+		    intCount = 0,
+		    longCount = 0,
+		    floatCount = 0,
+		    doubleCount = 0,
+		    boolCount = 0,
+		    signedCount = 0,
+		    unsignedCount = 0;
+		    
+		public Type checkSpecForPrimitives(boolean isConst, boolean isVolatile) throws Exception{
+			int countDataTypes = voidCount + charCount   + intCount    
+						       + floatCount  + doubleCount
+						       + boolCount;
+			
+			int signs = signedCount + unsignedCount;
 
-}
-
-@synpredgate{
-	state.backtracking == 0 || !nested_type_id_stack.empty()
-}
-
-@rulecatch{
-catch (RecognitionException re) {
-	reportError(re);
-	recover(input,re);
-	retval.tree = (Object)adaptor.errorNode(input, retval.start, input.LT(-1), re);
-	if(!Class_stack.empty()){
-		current_scope = current_scope.getParentScope();
-		current_scope.removeNestedType($Class::className);
-		throw re;
+			//if(countDataTypes == 0) return; //error //is that possible?
+			if(countDataTypes > 1) {
+				throw new Exception("error: two or more data types in declaration of");
+			}
+			
+			if(signedCount > 1 && unsignedCount > 1) {
+				throw new Exception("error: 'signed' and 'unsigned' specified together for");
+			}
+			
+			String type_name = "";
+			
+			if(voidCount == 1){
+				if(signs != 0) {
+					throw new Exception("error: 'signed' or 'unsigned' invalid for");
+				}
+				if(longCount != 0 || shortCount != 0) {
+					throw new Exception("error: 'long' or 'short' invalid for");
+				}
+				type_name += "void";
+			}
+			else if(charCount == 1){
+				if(longCount != 0 || shortCount != 0) {
+					throw new Exception("error: 'long' or 'short' invalid for");
+				}
+				type_name += unsignedCount == 1 ? "unsigned " : "" + "char";
+			}
+			else if(intCount == 1){
+				if(longCount > 0 && shortCount > 0){
+					throw new Exception("error: 'long' and 'short' specified together for");
+				}
+				type_name += unsignedCount == 1 ? "unsigned " : "";
+				if(longCount != 0){
+					if(longCount > 2) {
+						throw new Exception("error: 'long long long' invalid for");
+					}
+					for(int i = 0 ; i < longCount ; ++i) type_name += "long ";
+				}
+				else if(shortCount != 0){
+					type_name += "short";
+				}
+				else{
+					type_name += "int";
+				}
+			}
+			else if(floatCount == 1){
+				if(signs != 0) {
+					throw new Exception("error: 'signed' or 'unsigned' invalid for");
+				}
+				if(longCount != 0 || shortCount != 0) {
+					throw new Exception("error: 'long' or 'short' invalid for");
+				}
+				type_name += "float";
+			}
+			else if(doubleCount == 1){
+				if(signs != 0) {
+					throw new Exception("error: 'signed' or 'unsigned' invalid for");
+				}
+				if(shortCount > 1){
+					throw new Exception("error: 'short' invalid for");
+				}
+				if(longCount > 1) {
+					throw new Exception("error: 'long long' invalid for");
+				}
+				type_name += longCount == 1 ? "long " : "" + "double";
+			}
+			else if(boolCount == 1){
+				if(signs != 0) {
+					throw new Exception("error: 'signed' or 'unsigned' invalid for");
+				}
+				if(longCount != 0 || shortCount != 0) {
+					throw new Exception("error: 'long' or 'short' invalid for");
+				}
+				type_name += "bool";
+			}
+			else if(shortCount != 0 && longCount == 0){
+				type_name += unsignedCount == 1 ? "unsigned " : "" + "short";
+			}
+			else if(longCount != 0 && shortCount == 0){
+				if(longCount > 2) {
+					throw new Exception("errro: 'long long long' invalid for");
+				}
+				type_name += unsignedCount == 1 ? "unsigned " : "";
+				if(longCount == 1) type_name += "long";
+				if(longCount == 2) type_name += "long long";
+			}
+			else{
+				throw new Exception("error: 'long' and 'short' specified together for");
+			}
+			
+			return new PrimitiveType(type_name, isConst, isVolatile);
+		}
 	}
-}
+	
+	private Type_Spec_scope get_Type_Spec_scope(){
+		Stack type_specs = Type_Spec_stack;
+		return (Type_Spec_scope)type_specs.get(type_specs.size() - 1);
+	}
+	
+	private void Type_Spec_at_init(){
+		Type_Spec_scope specs = get_Type_Spec_scope();
+		specs.error_for_signed = false;
+		specs.error_for_unsigned = false;
+		specs.type = new boolean[]{false,
+					   false};
+		specs.counters = new PrimitiveTypeCheck();
+	}
+	
+	//End Type_Spec scope
+	
+	//cv_qual scope
+	
+	private cv_qual_scope get_cv_qual_scope(){
+		Stack cv_qual_st = cv_qual_stack;
+		return (cv_qual_scope)cv_qual_st.get(cv_qual_st.size() - 1);
+	}
+	
+	
+	private void cv_qual_at_init(){
+		cv_qual_scope cv_quals = get_cv_qual_scope();
+		cv_quals.constCount = cv_quals.volatileCount = 0;
+		cv_quals.error_for_const = false;
+		cv_quals.error_for_volatile = false;
+	}
+	//end cv_qual scope
+	
+	//storage_class_spec
+	
+	private storage_class_spec_scope get_storage_class_spec(){
+		Stack storage_class_spec_st = storage_class_spec_stack;
+		return (storage_class_spec_scope) storage_class_spec_st.get(storage_class_spec_st.size() - 1);
+	}
+	
+	private void storage_class_spec_at_init(){
+		storage_class_spec_scope specs = get_storage_class_spec();
+		specs.error_found = false;
+		specs.externCount = 0;
+		specs.staticCount = 0;
+		specs.autoCount = 0;
+		specs.registerCount = 0;
+	}
+	
+	//end storage_class_spec
+
 }
 
 translation_unit
 	: external_declaration+
 	;
-
+	
 /** Either a function definition or any other kind of C decl/def.
  *  The LL(*) analysis algorithm fails to deal with this due to
  *  recursion in the declarator rules.  I'm putting in a
@@ -209,24 +369,24 @@ translation_unit
  */
 external_declaration
 options {k=1;}
-	: namespace_definition 
-	|(type_specifier nested_type_id '::' declarator '{') => extern_method_definition
-	|( declaration_specifiers? declarator '{' )=> function_definition
-	|declaration
+	: namespace_definition
+	| (/*!!!*/nested_type_id '::' declarator[null] '{') => extern_method_definition
+	| (declaration_specifiers? declarator[null] '{' )=> function_definition
+	| declaration
 	;
 	
 namespace_definition
-	: 'namespace' IDENTIFIER {NameSpaces.add($IDENTIFIER.text);}'{' external_declaration*  '}'
+	: 'namespace' IDENTIFIER '{' external_declaration*  '}'
 	;
 	
 extern_method_definition
-	: type_specifier nested_type_id '::' declarator compound_statement
+	: type_specifier nested_type_id '::' declarator[null] compound_statement
 	;
-
+	
 function_definition
-	:	declaration_specifiers? declarator compound_statement		// ANSI style only
+	:	declaration_specifiers? declarator[null] compound_statement		// ANSI style only
 	;
-
+	
 declaration
 scope {
   boolean isTypedef;
@@ -234,14 +394,16 @@ scope {
 @init {
   $declaration::isTypedef = false;
 }
-	: 'typedef' declaration_specifiers? {$declaration::isTypedef=true;}
-	  init_declarator_list ';' // special case, looking for typedef	
-	| declaration_specifiers init_declarator_list? ';' -> ^(DECLARATION declaration_specifiers init_declarator_list?)
+	: (struct_union_or_class IDENTIFIER ':' 'public') => struct_union_or_class_declaration ';'
+	| (struct_union_or_class IDENTIFIER '{') => struct_union_or_class_declaration ';'
+	|'typedef' declaration_specifiers? {$declaration::isTypedef=true;}
+	  init_declarator_list[$declaration_specifiers.error] ';' // special case, looking for typedef	
+	| declaration_specifiers init_declarator_list[$declaration_specifiers.error]? ';'
 	| template_declaration
 	;
 	
 template_declaration
-	:  template_specifier declarator
+	:  template_specifier declarator[null]
 	;
 	
 template_specifier 
@@ -261,150 +423,200 @@ options{k = 2;}
 	;
 	
 template_type_id
-	: {isTemplateType(input.LT(1).getText())}? => IDENTIFIER
-	;	
-
-declaration_specifiers
+	: IDENTIFIER
+	;
+	
+declaration_specifiers returns [Type t, String error]
+scope Type_Spec;
+scope cv_qual;
+scope storage_class_spec;
+@init{
+	Type_Spec_at_init();
+	cv_qual_at_init();
+	storage_class_spec_at_init();
+}
 	:   (    storage_class_specifier
         	|   type_qualifier
         	|   type_specifier
-            )+ -> ^(DECL_SPEC ^(STORAGE_CLASS_SPEC storage_class_specifier*)? 
-            		      ^(TYPE_QUAL type_qualifier*)? 
-            		      ^(TYPE_SPEC type_specifier*)?)
+            )+
+             {
+             	$t = null;
+             	$error = null;
+             	Type_Spec_scope type_specs = get_Type_Spec_scope();
+             	cv_qual_scope cv_quals = get_cv_qual_scope();
+             	boolean isConst = cv_quals.constCount != 0 ? true : false, 
+             		isVolatile = cv_quals.volatileCount != 0 ? true : false;
+             	//count for data types in declarations specifiers
+             	int countTypes = 0;
+             	for(boolean t : type_specs.type) if(t == true) ++countTypes;
+             	if(countTypes > 1){	//multiple data types
+             		$error = "error: two or more data types in declaration of";
+             	}
+             	else{
+             		//declaration secifiers is for primitive type
+             		if(type_specs.type[0] == true){
+             			try{
+             				$t = type_specs.counters.checkSpecForPrimitives(isConst, isVolatile);
+             			}
+             			catch(Exception ex){	
+             				//erro in declaration specs for a primitive type
+             				$error = ex.getMessage();
+             			}
+             		}
+             		//other cases
+             	}
+             }
 	;
 	
 function_specifier
-	: 'virtual' {$Class::isVirtual = true;}
+	: 'virtual'
 	| 'explicit'
 	;
-
-init_declarator_list
-	: init_declarator (',' init_declarator)*
+	
+init_declarator_list [String error]
+	: init_declarator [$error] (',' init_declarator[$error])*
 	;
-
-init_declarator
-	: declarator ('='^ initializer)?
+	
+init_declarator [String error]
+	: declarator[$error] ('=' initializer)?
 	;
-
+	
 storage_class_specifier
 	: 'extern'
+	  {
+	  	$storage_class_spec::externCount++;
+	  }
+	  {storage_class_specs_error() == true}?
 	| 'static'
+	  {
+	  	$storage_class_spec::staticCount++;
+	  }
+	  {storage_class_specs_error() == true}?
 	| 'auto'
+	  {
+	  	$storage_class_spec::autoCount++;
+	  }
+	  {storage_class_specs_error() == true}?
 	| 'register'
-	; 
-
+	  {
+	  	$storage_class_spec::registerCount++;
+	  }
+	  {storage_class_specs_error() == true}?
+	;
+	
 type_specifier
 	: 'void'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.voidCount++;
+	  }
 	| 'char'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.charCount++;
+	  }
 	| 'short'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.shortCount++;
+	  }
 	| 'int'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.intCount++;
+	  }
 	| 'long'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.longCount++;
+	  }
 	| 'float'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.floatCount++;
+	  }
 	| 'double'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.doubleCount++;
+	  }
+	| 'bool'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.boolCount++;
+	  }
 	| 'signed'		//this is the deafault, isn't it ?
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.signedCount++;
+	  }
+	  {signed_count_error() == true}?
 	| 'unsigned'
+	  {
+	     $Type_Spec::type[0] = true;
+	     $Type_Spec::counters.unsignedCount++;
+	  }
+	  {unsigned_count_error() == true}?
 	| struct_union_or_class_specifier
-	| enum_specifier
+	/*| enum_specifier
 	| nested_type_id
-	| nested_template_id
+	| nested_template_id*/
 	;
-
-nested_type_id returns [Types t]
+	
+nested_type_id
 scope{
   ArrayList<String> types;
 }
 @init{
   $nested_type_id::types = new ArrayList<String>();
 }
-	: global_scope = '::'? type_id scope_resolution* {isTypeName($nested_type_id::types, global_scope != null ? true : false)}?
-							 {$t = getTypeName($nested_type_id::types, global_scope != null ? true : false);}
-							 -> {global_scope != null}? ^(NESTED_ID_GLOBAL type_id scope_resolution*)
-							 -> ^(NESTED_ID type_id scope_resolution*)
+	: global_scope = '::'? type_id scope_resolution* 
 	;
-
+	
 scope_resolution
-	: '::'! type_id
+	: '::' type_id
 	;
-
 
 struct_union_or_class_specifier
 options {k=3;}
-scope Class;
-@init {
-  paraphrases.clear();
-  $Class::inClass = true;
-  $Class::className = input.LT(2).getText();
-  $Class::isVirtual = false;
-  $Class::isTypedef = false;
-  $Class::token3 = input.LT(3).getText();
-  $Class::superClasses = new ArrayList<Types> ();
-}
-@after{
-  current_scope = current_scope.getParentScope();
-}
-	: /*{!$Class::token3.equals(":")}? {!$Class::token3.equals("{")}?*/ struct_union_or_class IDENTIFIER {if(current_scope.isLocalType($Class::className))
-													  	throw new RecognitionException();
-													  Types newScope = new Types($Class::className, current_scope, access);
-													  current_scope.addNestedType(newScope);
-													  current_scope = newScope;}
-	| {if(current_scope.isLocalType($Class::className))
-		throw new RecognitionException();
-	   Types newScope = new Types($Class::className, current_scope, access);
-  	   current_scope.addNestedType(newScope);
-  	   current_scope = newScope;}
-  	   struct_union_or_class IDENTIFIER (':' 'public' n1 = nested_type_id {$Class::superClasses.add($n1.t);}  (',' n2 = nested_type_id {$Class::superClasses.add($n2.t);})*)? 
-  	   {
-  	   	if($Class::superClasses != null){
-  	   		for(Types t : $Class::superClasses)
-  	   			current_scope.addSuperType(t);
-  	   	}
-  	   }
-  	   '{' class_declaration_list '}'
+	: //(struct_union_or_class IDENTIFIER ':' 'public') => struct_union_or_class_declaration
+	//| (struct_union_or_class IDENTIFIER '{') => struct_union_or_class_declaration
+  	 struct_union_or_class IDENTIFIER
 	//anonymous class ---> | struct_union_or_class  (':' 'public' nested_type_id (',' nested_type_id)*)? '{' class_declaration_list '}'
 	; 
-	
+
+struct_union_or_class_declaration
+	: struct_union_or_class IDENTIFIER (':' 'public' n1 = nested_type_id (',' n2 = nested_type_id)*)? 
+  	   '{' class_declaration_list '}' init_declarator_list[null]?
+	;
+
 type_id
     : IDENTIFIER {$nested_type_id::types.add($IDENTIFIER.text);}
     //|  {}? {}? => IDENTIFIER
     ;
-//    	{System.out.println($IDENTIFIER.text+" is a type");}
-
-
+    
 struct_union_or_class
 	: 'struct'
 	| 'union'
 	| 'class'
 	;
-
+	
 access_specifier
-	: 'private'   {access = 1;}
-	| 'protected' {access = 2;} 
-	| 'public'    {access = 3;}
+	: 'private'
+	| 'protected'
+	| 'public'
 	;
 
 class_declaration_list
-scope{
-  int prev_access;
-}
-@init{
-  
-    $class_declaration_list::prev_access = access;
-  
-}
-@after{
-  
-    access = $class_declaration_list::prev_access;
-  
-}
 	: class_content_element*
 	;
 	
 class_content_element
 	: access_specifier ':'
-	| (specifier_qualifier_list declarator '{') => inclass_function_definition 
+	| (specifier_qualifier_list declarator[null] '{') => inclass_function_definition 
 	| in_class_declaration
 	;
-
+	
 constructor_definition
 	: className '(' parameter_type_list? ')' compound_statement
 	;
@@ -420,27 +632,24 @@ destructor_definition
 destructor_declaration
 	: '~'className '(' ')' ';'
 	;
-	
-className
-	: IDENTIFIER {$Class::inClass == true}? {className($IDENTIFIER.text)}?
-	;
 
+className
+	: IDENTIFIER
+	;
+	
 in_class_declaration
-@after{
-	$Class::isVirtual = false;
-	$Class::isTypedef = false;
-	$Class::isPureVirtual = false;
-}
-	:  specifier_qualifier_list class_declarator_list? ';'
+	: (struct_union_or_class IDENTIFIER ':' 'public') => struct_union_or_class_declaration ';'
+	| (struct_union_or_class IDENTIFIER '{') => struct_union_or_class_declaration ';'
+	|  specifier_qualifier_list class_declarator_list? ';'
 	|  template_declaration
-	| 'typedef' specifier_qualifier_list? {$Class::isTypedef=true;}
-	   init_declarator_list ';'
+	| 'typedef' specifier_qualifier_list?
+	   init_declarator_list[null] ';'
 	| (constructor_definition | constructor_declaration)
 	| (destructor_definition | destructor_declaration)
 	;
 	
 inclass_function_definition
-	: {$Class::isPureVirtual == false}? => specifier_qualifier_list declarator compound_statement
+	: specifier_qualifier_list declarator[null] compound_statement
 	;
 
 specifier_qualifier_list
@@ -456,7 +665,7 @@ class_declarator_list
 	;
 
 class_declarator
-	: declarator (':' constant_expression)?
+	: declarator[null] (':' constant_expression)?
 	| ':' constant_expression
 	;
 
@@ -477,63 +686,76 @@ enumerator
 
 type_qualifier
 	: 'const'
+	  {
+	    $cv_qual::constCount++;
+	  }
+	  {const_count_error() == true}?
 	| 'volatile'
+	  {
+	    $cv_qual::volatileCount++;
+	  }
+	  {volatile_count_error() == true}?
 	;
 
-declarator returns [boolean isPointer]
-	: p = pointer? {if(p != null) $isPointer = true;
-			else $isPointer = false;} direct_declarator -> {p != null}? ^(POINTER_DECL pointer direct_declarator)
-					 			    -> direct_declarator
-	| pointer -> ^(POINTER pointer)
+declarator[String error] returns [String declarator_name]
+scope{
+	String dir_decl_identifier;
+	String dir_decl_error;
+}
+@init{
+	$declarator_name = null;
+	$declarator::dir_decl_error = $error;
+}
+	: p = pointer? direct_declarator {$declarator_name = $declarator::dir_decl_identifier;}
+	//| pointer
 	;
 
 direct_declarator
-	:   ( IDENTIFIER
+	:   ( IDENTIFIER { $declarator::dir_decl_identifier = $IDENTIFIER.text; }
+			 { direct_declarator_error($IDENTIFIER.text, $declarator::dir_decl_error) }?
 			//{
 			//if ($declaration.size()>0&& ($declaration::isTypedef)) {
 			//	$Symbols::types.add($IDENTIFIER.text);
 			//	System.out.println("define type "+$IDENTIFIER.text);
 			//}
 			//}
-		|	'(' decl = declarator ')'
+		|	'(' decl = declarator[$declarator::dir_decl_error] ')'
 		)
-        	declarator_suffix*  -> {decl != null}? ^(P_DECLARATOR declarator ^(DECL_SUF declarator_suffix*)?)
-        			    -> ^(DECLARATOR IDENTIFIER ^(DECL_SUF declarator_suffix*)?)
+        	declarator_suffix*
 	;
 
 declarator_suffix
-	:'[' constant_expression ']'				-> ^(ARRAY_CONST_DECL constant_expression)
-    	|'[' ']'						-> ^(ARRAY_DECL)
-    	|'(' parameter_type_list? ')' const_method_specifier? pure_virt_method_specifier?
-    								->^(PARAM_LIST parameter_type_list? const_method_specifier? pure_virt_method_specifier?)
+	:'[' constant_expression ']'
+    	|'[' ']'
+    	|'(' parameter_type_list? ')' //const_method_specifier? pure_virt_method_specifier?
     	|'(' identifier_list? ')'									//maybe K&R style
     	//|'(' ')' const_method_specifier? pure_virt_method_specifier? == rule3 with parameter_type_list?
 	;
-	
+
 const_method_specifier
-	: {!Class_stack.empty()}? {$Class::inClass}? 'const'
+	: 'const'
 	;
-	
+
 pure_virt_method_specifier
-	: {!Class_stack.empty()}? {$Class::inClass}? {$Class::isVirtual}? ('=' '0') {$Class::isPureVirtual = true;}
+	: ('=' '0')
 	;
 
 pointer
-	: '*' type_qualifier+ pointer? -> ^(QUAL_POINTER type_qualifier+ pointer?)
-	| '*' pointer -> ^(POINTER pointer)
-	| '*' -> POINTER
+	: '*' type_qualifier+ pointer?
+	| '*' pointer
+	| '*'
 	;
 
 parameter_type_list
-	: parameter_list (','! '...'! {((CommonTree)$parameter_list.tree).addChild(new CommonTree(new CommonToken(Token.DOWN, "VAR_ARGS")));})? 
+	: parameter_list (',' '...')? 
 	;
 
 parameter_list
-	: params += parameter_declaration (',' params += parameter_declaration)* -> {createTreeFromList($params)}
+	: params += parameter_declaration (',' params += parameter_declaration)*
 	;
 
 parameter_declaration
-	: declaration_specifiers (declarators += declarator| declarators += abstract_declarator)* -> ^(PARAM declaration_specifiers {createTreeFromList($declarators)})
+	: declaration_specifiers (declarators += declarator[null]| declarators += abstract_declarator)*
 	;
 
 identifier_list
@@ -545,24 +767,21 @@ type_name
 	;
 
 abstract_declarator
-	: pointer direct_abstract_declarator?  -> ^(POINTER_DECL pointer direct_abstract_declarator?)
-	| direct_abstract_declarator -> direct_abstract_declarator
+	: pointer direct_abstract_declarator?
+	| direct_abstract_declarator
 	;
 
 direct_abstract_declarator
 	:	( '(' par_decl = abstract_declarator ')' | decl_suf = abstract_declarator_suffix ) decl_suffixes += abstract_declarator_suffix*
-		
-		-> {par_decl != null}? ^(P_ABS_DECLARATOR abstract_declarator abstract_declarator_suffix*)
-		-> ^(ABS_DECLARATOR $decl_suf {createTreeFromList($decl_suffixes)})
 	;
 
 abstract_declarator_suffix
-	:	'[' ']'				-> ^(ARRAY_DECL)
-	|	'[' constant_expression ']'	-> ^(ARRAY_CONST_DECL constant_expression)
+	:	'[' ']'
+	|	'[' constant_expression ']'
 	//|	'(' ')'		     \>
-	|	'(' parameter_type_list? ')'	-> ^(PARAM_LIST parameter_type_list)
+	|	'(' parameter_type_list? ')'
 	;
-	
+
 initializer
 	: assignment_expression
 	| '{' initializer_list ','? '}'
@@ -637,9 +856,7 @@ constant
     |	STRING_LITERAL
     |   FLOATING_POINT_LITERAL
     ;
-
-/////
-
+ 
 expression
 	: assignment_expression (',' assignment_expression)*
 	;
@@ -753,7 +970,7 @@ iteration_statement
 	;
 	
 simple_declaration 
-	: type_specifier init_declarator_list ';'
+	: type_specifier init_declarator_list[null] ';'
 	;
 
 jump_statement
