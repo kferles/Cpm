@@ -39,7 +39,7 @@ options {
 }
 
 scope Type_Spec{
-	boolean error_for_signed, error_for_unsigned;
+	boolean error_for_signed, error_for_unsigned, error_for_short;
 	boolean type[];
 	PrimitiveTypeCheck counters;
 }
@@ -156,6 +156,17 @@ import symbolTable.types.*;
 		if(specs.counters.unsignedCount > 1){
 			specs.error_for_unsigned = true;
 			paraphrases.push("error: duplicate 'unsigned'");
+			return false;
+		}
+		return true;
+	}
+	
+	private boolean short_count_error(){
+		Type_Spec_scope specs = get_Type_Spec_scope();
+		if(specs.error_for_short == true) return true;
+		if(specs.counters.shortCount > 1){
+			specs.error_for_short = true;
+			paraphrases.push("error: duplicate 'short'");
 			return false;
 		}
 		return true;
@@ -520,6 +531,7 @@ type_specifier
 	     $Type_Spec::type[0] = true;
 	     $Type_Spec::counters.shortCount++;
 	  }
+	  {short_count_error() == true}?
 	| 'int'
 	  {
 	     $Type_Spec::type[0] = true;
