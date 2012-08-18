@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package symbolTable.namespace;
 
 import errorHandling.ErrorMessage;
@@ -9,7 +5,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import symbolTable.types.Method;
-import symbolTable.types.Method.Signature;
 import symbolTable.types.Type;
 
 /**
@@ -63,7 +58,7 @@ public class Class implements DefinesNamespace{
 
                 @Override
                 public int hashCode() {
-                    return element.hashCode();
+                    return this.element.hashCode();
                 }
             }
             
@@ -302,29 +297,5 @@ public class Class implements DefinesNamespace{
         return name;
     }
 
-    @Override
-    public Type findSymbol(String name) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    @Override
-    public Type findSymbol(String name, DefinesNamespace fromNamespace) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    @Override
-    public DefinesNamespace findNamespace(String name) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    @Override
-    public Method findMethod(String name, Signature s) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    @Override
-    public Type findField(String name) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
     
 }
