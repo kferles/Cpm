@@ -14,6 +14,9 @@ public class PrimitiveType extends SimpleType {
 //                                     "long", "unsigned long", 
 //                                     "long long", "unsigned long long",
 //                                     "float", "double", "long double"};
+    
+    private static String void_t[] = {"void"};
+    
     private static String bool[] = {"bool"};
     
     private static String signedInts[] = {"char", "short", "int", "long", "long long"};
@@ -50,8 +53,12 @@ public class PrimitiveType extends SimpleType {
         else if(name.equals("unsigned long int")) name = "unsigned long";
         else if(name.equals("unsigned long long int")) name = "unsigned long long";
         this.name = name;
-        if(name.equals("bool")){
+        if(name.equals("bool") == true){
             this._type = PrimitiveType.bool;
+            this.index = 0;
+        }
+        else if(name.equals("void") == true){
+            this._type = PrimitiveType.void_t;
             this.index = 0;
         }
         else{
