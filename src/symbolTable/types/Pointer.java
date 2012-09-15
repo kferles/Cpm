@@ -1,5 +1,6 @@
 package symbolTable.types;
 
+import errorHandling.AmbiguousBaseClass;
 import errorHandling.ErrorMessage;
 import java.util.ArrayList;
 
@@ -17,6 +18,10 @@ public class Pointer extends Type{
         this.isVolatile = isVolatile;
     }
     
+    public void setPointsTo(Type pointsTo){
+        this.pointsTo = pointsTo;
+    }
+    
     @Override
     protected StringBuilder getString(StringBuilder aggr){
         if(pointsTo instanceof Method){
@@ -25,31 +30,101 @@ public class Pointer extends Type{
             StringBuilder methRv = new StringBuilder();
             methRv.append(m.s.returnValue);
             int rParIndex = methRv.indexOf(")");
-            if(rParIndex == -1){
-                methRv.append(" (*");
-            }
-            else{
+            if(rParIndex != -1){
                 String start = methRv.substring(0, rParIndex);
                 end = methRv.substring(rParIndex, methRv.length());
                 methRv = new StringBuilder(start);
-                methRv.append(" (*");
+            }
+            methRv.append(" (");
+            if(aggr.length() != 0 && aggr.charAt(0) != '*'){
+                methRv.append("*");
+                if(this.isConst == true || this.isVolatile){
+                    methRv.append(this.isConst == true ? " const" : "");
+                    methRv.append(this.isVolatile == true ? " volatile" : "");
+                    methRv.append(" ");
+                }
+                aggr = methRv.append(aggr);
+            }
+            else{
+                aggr = methRv.append(aggr);
+                aggr.append("*");
+                if(this.isConst == true || this.isVolatile == true){
+                    aggr.append(this.isConst == true ? " const" : "");
+                    aggr.append(this.isVolatile == true ? " volatile" : "");
+                    aggr.append(" ");
+                }
             }
             aggr.append(")(");
             ArrayList<Type> parameters = m.s.parameters;
-            int size = parameters.size();
-            for(int i = 0 ; i < size ; ++i){
-                aggr.append(i == 0 ? "" : ",");
-                aggr.append(parameters.get(i));
+            if(parameters != null){
+                int size = parameters.size();
+                for(int i = 0 ; i < size ; ++i){
+                    aggr.append(i == 0 ? "" : ",");
+                    aggr.append(parameters.get(i));
+                }
             }
             aggr.append(")");
+            if(m.isConst == true) aggr.append(" const");
+            if(m.isVolatile == true) aggr.append(" volatile");
             if(end != null)
                 aggr.append(end);
-            return methRv.append(aggr);
+            return aggr;
+        }
+        else if(this.pointsTo instanceof CpmArray){
+            CpmArray ar = (CpmArray) this.pointsTo;
+            StringBuilder start = new StringBuilder(ar.array_of.toString());
+            String end = null;
+            int rParIndex = start.indexOf(")");
+            if(rParIndex != -1){
+                end = start.substring(rParIndex, start.length());
+                start = new StringBuilder(start.substring(0, rParIndex));
+            }
+            start.append(" (");
+            aggr = start.append(aggr);
+            aggr.append("*");
+            if(this.isConst == true || this.isVolatile == true){
+                if(this.isConst == true) start.append(" const");
+                if(this.isVolatile == true) start.append(" volatile");
+                start.append(" ");
+            }
+            aggr.append(") ");
+            for(int i = 0 ; i < ar.dimensions_num ; ++i){
+                aggr.append("[]");
+            }
+            if(end != null) aggr.append(end);
+            return aggr;
         }
         else{
+            StringBuilder id = null;
+            String start = null;
+            String end = null;
+            if(aggr.length() != 0 && aggr.charAt(0) != '*'){
+                id = new StringBuilder(" ").append(aggr);
+                aggr = new StringBuilder();
+            }
             aggr.append("*");
-            return pointsTo.getString(aggr);
+            if(this.isConst == true || this.isVolatile == true){
+                aggr.append(this.isConst == true ? " const" : "");
+                aggr.append(this.isVolatile == true ? " volatile" : "");
+                aggr.append(" ");
+            }
+            StringBuilder pTo = this.pointsTo.getString(aggr);
+            int rParIndex = pTo.indexOf(")");
+            if(rParIndex != -1 && id != null){
+                start = pTo.substring(0, rParIndex);
+                end = pTo.substring(rParIndex, pTo.length());
+                start += id.toString();
+            }
+            if(start != null && end != null){
+                return new StringBuilder(start + end);
+            }
+            return pTo.append(id != null ? id : "");
         }
+    }
+    
+    @Override
+    public String toString(String id){
+        return this.getString(new StringBuilder(id)).toString();
     }
     
     @Override
@@ -71,7 +146,7 @@ public class Pointer extends Type{
     }
 
     @Override
-    public boolean subType(Type o) throws ErrorMessage {
+    public boolean subType(Type o) throws AmbiguousBaseClass {
         if(o == null) return false;
         if(o instanceof Pointer){
             if(super.equals((Type) o) == false) return false;   //check this one from standard for cv-qualifiers
@@ -89,4 +164,5 @@ public class Pointer extends Type{
         }
         return false;
     }
+    
 }

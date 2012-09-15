@@ -1,5 +1,6 @@
 package symbolTable.types;
 
+import errorHandling.AmbiguousBaseClass;
 import errorHandling.ErrorMessage;
 
 /**
@@ -16,12 +17,14 @@ public abstract class Type {
     
     protected abstract StringBuilder getString(StringBuilder aggr);
     
+    public abstract String toString(String id);
+    
     /**
      * It checks either or not this is subtype of o, i.e this <: o.
      * @param o The other type.
      * @return True if this <: o and false otherwise.
      */
-    public abstract boolean subType(Type o) throws ErrorMessage;
+    public abstract boolean subType(Type o) throws AmbiguousBaseClass;
 
     /**
      * Returns a string of the type similar to g++ representation of types (mostly from the error messages).
@@ -45,6 +48,14 @@ public abstract class Type {
      */
     public void setIsVolatile(){
         this.isVolatile = true;
+    }
+    
+    public boolean isConst(){
+        return this.isConst;
+    }
+    
+    public boolean isVolatile(){
+        return this.isVolatile;
     }
 
     /**

@@ -25,8 +25,16 @@ public abstract class SimpleType extends Type {
     
     @Override
     protected StringBuilder getString(StringBuilder aggr){
-        StringBuilder n = new StringBuilder(this.name);
+        StringBuilder n = new StringBuilder(this.isConst == true ? "const " : "");
+        n.append(this.isVolatile == true ? "volatile " : "");
+        n.append(this.name);
+        n.append(aggr.toString().equals("") ? "" : " ");
         return n.append(aggr);
+    }
+    
+    @Override
+    public String toString(String id){
+        return this.getString(new StringBuilder(id)).toString();
     }
 
     @Override

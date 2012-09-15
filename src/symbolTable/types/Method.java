@@ -1,6 +1,6 @@
 package symbolTable.types;
 
-import errorHandling.ErrorMessage;
+import errorHandling.AmbiguousBaseClass;
 import java.util.ArrayList;
 import symbolTable.namespace.DefinesNamespace;
 
@@ -35,6 +35,22 @@ public class Method extends Type{
             this.returnValue = returnValue;
             this.parameters = parameters;
         }
+        
+        public Type getReturnValue(){
+            return this.returnValue;
+        }
+        
+        public ArrayList<Type> getParameters(){
+            return this.parameters;
+        }
+        
+        public void setReturnValue(Type t){
+            this.returnValue = t;
+        }
+        
+        public void setParameters(ArrayList<Type> params){
+            this.parameters = params;
+        }
 
         @Override
         public boolean equals(Object o){
@@ -66,7 +82,8 @@ public class Method extends Type{
     Signature s;
     
     boolean isVirtual,
-            isAbstract;
+            isAbstract,
+            isExplicit = false;
     
     
     /*
@@ -85,11 +102,14 @@ public class Method extends Type{
      * @param isAbstract    Whether method is implemented or not.
      * @param isConst       Whether method is const or not.
      */
-    public Method(Type returnValue, ArrayList<Type> parameters, boolean isVirtual, boolean isAbstract, boolean isConst){
+    public Method(Type returnValue, ArrayList<Type> parameters, DefinesNamespace belongsTo, 
+                  boolean isVirtual, boolean isAbstract, boolean isConst, boolean isVolatile){
         this.s = new Signature(returnValue, parameters);
         this.isVirtual = isVirtual;
         this.isAbstract = isAbstract;
         this.isConst = isConst;
+        this.isVolatile  = isVolatile;
+        this.belongsTo = belongsTo;
     }
     
     /**
@@ -104,38 +124,67 @@ public class Method extends Type{
         if(o == null) return false;
         if(o instanceof Method){
             Method m = (Method)o;
+            if(this.belongsTo != m.belongsTo) return false;
             if(this.s.equals(m.s) == false) return false;
             if(this.s.returnValue.equals(m.s.returnValue) == false) return false;
             if(this.isAbstract != m.isAbstract) return false;
             if(this.isVirtual != m.isVirtual) return false;
             if(this.isConst != m.isConst) return false;
+            if(this.isVolatile != m.isVolatile) return false;
             return true;
         }
         return false;
     }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 67 * hash + (this.s != null ? this.s.hashCode() : 0);
+        hash = 67 * hash + (this.isVirtual ? 1 : 0);
+        hash = 67 * hash + (this.isAbstract ? 1 : 0);
+        hash = 67 * hash + (this.belongsTo != null ? this.belongsTo.hashCode() : 0);
+        return hash;
+    }
     
-    /**
-     * Sets the type that the method belongs to. If the method is in global scope
-     * this method is not being invoked.
-     * 
-     * @param t The UserDefinedType class that represents method's type.
+    
+    /*
+     * TODO: when and where to print const and virtual
      */
-    public void setNamespace(DefinesNamespace t){
-        this.belongsTo = t;
+    @Override
+    protected StringBuilder getString(StringBuilder aggr) {
+        StringBuilder start = new StringBuilder(s.returnValue != null ? s.returnValue.toString() : "");
+        int rParenIndex = start.indexOf(")");
+        String end = null;
+        if(rParenIndex != -1){
+            end = start.substring(rParenIndex, start.length());
+            start = new StringBuilder(start.substring(0, rParenIndex));
+        }
+        String namespace = this.belongsTo.toString();
+        start.append(" ");
+        if(namespace.equals("") == false){
+            start.append(namespace);
+            start.append("::");
+        }
+        start.append(aggr);
+        aggr = start.append(" (");
+        if(s.parameters != null){
+            int size = s.parameters.size();
+            for(int i = 0 ; i < size ; ++i){
+                Type t = s.parameters.get(i);
+                aggr.append(i == 0 ? "" : ",");
+                aggr.append(t);
+            }
+        }
+        aggr.append(")");
+        if(this.isConst == true) aggr.append(" const");
+        if(this.isVolatile == true) aggr.append(" volatile");
+        if(end != null) aggr.append(end);
+        return aggr;
     }
     
     @Override
-    protected StringBuilder getString(StringBuilder aggr) {
-        aggr.append(s.returnValue);
-        aggr.append("(");
-        int size = s.parameters.size();
-        for(int i = 0 ; i < size ; ++i){
-            Type t = s.parameters.get(i);
-            aggr.append(i == 0 ? "" : ",");
-            aggr.append(t);
-        }
-        aggr.append(")");
-        return aggr;
+    public String toString(String id){
+        return this.getString(new StringBuilder(id)).toString();
     }
     
     public Type getReturnType(){
@@ -147,23 +196,23 @@ public class Method extends Type{
     }
     
     public boolean isVirtual(){
-        return isVirtual;
+        return this.isVirtual;
     }
     
     public void setVirtual(){
-        isVirtual = true;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 17 * hash + (this.s != null ? this.s.hashCode() : 0);
-        return hash;
+        this.isVirtual = true;
     }
     
-    public boolean isOverriderFor(Method m) throws ErrorMessage{
-        boolean subtype = this.s.returnValue.subType(m.s.returnValue);
-        return subtype;
+    public void setExplicit(){
+        this.isExplicit = true;
+    }
+    
+    public boolean isExplicit(){
+        return this.isExplicit;
+    }
+    
+    public boolean isOverriderFor(Method m) throws AmbiguousBaseClass{
+        return this.s.returnValue.subType(m.s.returnValue);
     }
     
 }

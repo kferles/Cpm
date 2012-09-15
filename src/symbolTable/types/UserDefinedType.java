@@ -1,7 +1,9 @@
 package symbolTable.types;
 
-import errorHandling.ErrorMessage;
-import symbolTable.namespace.Class;
+import errorHandling.AmbiguousBaseClass;
+import symbolTable.namespace.CpmClass;
+import symbolTable.namespace.NamedType;
+import symbolTable.namespace.SynonymType;
 
 /**
  *
@@ -9,9 +11,9 @@ import symbolTable.namespace.Class;
  */
 public class UserDefinedType extends SimpleType{
 
-    Class type;
+    NamedType type;
     
-    public UserDefinedType(Class type, boolean isConst, boolean isVolatile) {
+    public UserDefinedType(NamedType type, boolean isConst, boolean isVolatile) {
         super(type.getName());
         this.type = type;
         this.isConst = isConst;
@@ -41,7 +43,7 @@ public class UserDefinedType extends SimpleType{
 
 
     @Override
-    public boolean subType(Type o) throws ErrorMessage{
+    public boolean subType(Type o) throws AmbiguousBaseClass{
         if(o == null) return false;
         if(o instanceof UserDefinedType){
             UserDefinedType ut = (UserDefinedType) o;
@@ -50,21 +52,45 @@ public class UserDefinedType extends SimpleType{
         return false;
     }
     
-    public boolean isCovariantWith(UserDefinedType t) throws ErrorMessage {
+    public boolean isCovariantWith(UserDefinedType t) throws AmbiguousBaseClass  {
         if(t == null) return false;
-        /*
-         * checking cv-qualifiers for class type according to C++ standard.
-         */
-        if(super.equals(t) == false){
-            if(this.isConst == true || this.isVolatile == true){
-                if(t.isConst == false && t.isVolatile == false) return false;
+        if(this.type instanceof CpmClass){
+            if(t.type instanceof CpmClass){
+                /*
+                 * checking cv-qualifiers for class type according to C++ standard.
+                 */
+                CpmClass c1 = (CpmClass) this.type, c2 = (CpmClass) t.type;
+                if(super.equals(t) == false){
+                    if(this.isConst == true || this.isVolatile == true){
+                        if(t.isConst == false && t.isVolatile == false) return false;
+                    }
+                    if(this.isConst == true && this.isVolatile == true){
+                        if(t.isConst == false || t.isVolatile == false) return false;
+                    }
+                }
+                return c1.isCovariantWith(c2);
             }
-            if(this.isConst == true && this.isVolatile == true){
-                if(t.isConst == false || t.isVolatile == false) return false;
+            else{
+                Type syn_t = ((SynonymType) this.type).getSynonym();
+                if(syn_t instanceof UserDefinedType){
+                    return this.isCovariantWith((UserDefinedType) syn_t);
+                }
+                else return false;
             }
         }
-        if(this.type.isCovariantWith(t.type) == false) return false;
-        return true;
+        else{
+            SynonymType t1 = (SynonymType) this.type;
+            Type syn_t = t1.getSynonym();
+            if(syn_t instanceof UserDefinedType){
+                return ((UserDefinedType) syn_t).isCovariantWith(t);
+            }
+            else return false;
+            
+        }
+    }
+    
+    public NamedType getNamedType(){
+        return this.type;
     }
     
 }
