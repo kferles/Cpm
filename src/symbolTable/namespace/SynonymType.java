@@ -24,6 +24,8 @@ public class SynonymType implements NamedType {
     
     String enum_or_typedef;
     
+    String fileName;
+    
     int line, pos;
 
     public SynonymType(String name, Type synonym, DefinesNamespace belongsTo){
@@ -46,6 +48,15 @@ public class SynonymType implements NamedType {
     
     public void setSynonym(Type t){
         this.synonym = t;
+    }
+    
+    public void setFileName(String fileName){
+        this.fileName = fileName;
+    }
+    
+    @Override
+    public String getFileName(){
+        return this.fileName;
     }
     
     public void setLineAndPos(int line, int pos){

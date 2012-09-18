@@ -27,4 +27,6 @@ public interface NamedType {
     
     boolean isComplete(CpmClass current) throws VoidDeclaration;
     
+    String getFileName();
+    
 }

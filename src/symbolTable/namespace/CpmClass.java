@@ -64,6 +64,8 @@ public class CpmClass implements DefinesNamespace, NamedType{
     
     int line, pos;
     
+    String fileName;
+    
     boolean isComplete;
 
             private class ClassContentElement <T>{
@@ -73,12 +75,15 @@ public class CpmClass implements DefinesNamespace, NamedType{
 
                 boolean isStatic;
                 
+                String fileName;
+                
                 int line, pos;
 
-                public ClassContentElement(T element, AccessSpecifier access, boolean isStatic, int line, int pos){
+                public ClassContentElement(T element, AccessSpecifier access, boolean isStatic, String fileName, int line, int pos){
                     this.element = element;
                     this.access = access;
                     this.isStatic = isStatic;
+                    this.fileName = fileName;
                     this.line = line;
                     this.pos = pos;
                 }
@@ -105,13 +110,13 @@ public class CpmClass implements DefinesNamespace, NamedType{
         for(ClassContentElement<Method> method : methodsInSuper){
             try{
                 if(m.isOverriderFor(method.element) == false){
-                    ConflictingRVforVirtual c_rv = new ConflictingRVforVirtual(name, m, method.element);
+                    ConflictingRVforVirtual c_rv = new ConflictingRVforVirtual(name, m, method.element, method.fileName);
                     c_rv.setLineAndPos(method.line, method.pos);
                     throw c_rv;
                 }
             }
             catch(AmbiguousBaseClass _){
-                InvalidCovariantForVirtual inv = new InvalidCovariantForVirtual(name, m, method.element);
+                InvalidCovariantForVirtual inv = new InvalidCovariantForVirtual(name, m, method.element, method.fileName);
                 inv.setLineAndPos(method.line, method.pos);
                 throw inv;
             }
@@ -152,7 +157,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
         if(this.allSymbols.containsKey(name) == true){
             ClassContentElement<? extends Type> old_entry = this.allSymbols.get(name);
             String id = getFieldsFullName(name);
-            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.line, old_entry.pos);
+            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.fileName, old_entry.line, old_entry.pos);
         }
     }
     
@@ -160,7 +165,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
         if(this.allSymbols.containsKey(name) == true){
             ClassContentElement<? extends Type> old_entry = this.allSymbols.get(name);
             String id = this.getFieldsFullName(name);
-            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.line, old_entry.pos);
+            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.fileName, old_entry.line, old_entry.pos);
         }
     }
     
@@ -230,7 +235,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
             ClassContentElement<CpmClass> _class = this.innerTypes.get(name);
             String access_err = resolve_access(_class.access, from_scope);
             if(access_err != null){
-                access_err = "line " + _class.element.line + ":" + _class.element.pos + " error: '" + _class.element.toString() + "' " + access_err;
+                access_err = _class.fileName + " line " + _class.element.line + ":" + _class.element.pos + " error: '" + _class.element.toString() + "' " + access_err;
                 compl_errors.add(access_err);
             }
             agr.add(_class.element);
@@ -239,7 +244,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
             ClassContentElement<SynonymType> syn_t = this.innerSynonyms.get(name);
             String access_err = resolve_access(syn_t.access, from_scope);
             if(access_err != null){
-                access_err = "line " + syn_t.element.line + ":" + syn_t.element.pos + " error: '" + syn_t.element.toString() + "' " + access_err;
+                access_err = syn_t.fileName + " line " + syn_t.element.line + ":" + syn_t.element.pos + " error: '" + syn_t.element.toString() + "' " + access_err;
                 compl_errors.add(access_err);
             }
             agr.add(syn_t.element);
@@ -374,7 +379,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
         String key = name;
         this.checkForConflictsInDecl(name, t, line, pos);
         this.checkForChangingMeaningOfType(name, t, line, pos);
-        ClassContentElement<Type> field = new ClassContentElement<Type>(t, access, isStatic, line, pos);
+        ClassContentElement<Type> field = new ClassContentElement<Type>(t, access, isStatic, this.fileName, line, pos);
         fields.put(key, field);
         insertInAllSymbols(key, field);
     }
@@ -401,7 +406,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
              */
             CpmClass t1 = innerTypes.get(key).element;
             if(t1.isComplete == false){
-                innerTypes.put(key, new ClassContentElement<CpmClass>(t, access, isStatic, t.line, t.pos));
+                innerTypes.put(key, new ClassContentElement<CpmClass>(t, access, isStatic, t.fileName, t.line, t.pos));
                 return;
             }
             else if(t.isComplete == true){
@@ -415,7 +420,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
             SynonymType syn = this.innerSynonyms.get(key).element;
             throw new Redefinition(t, syn);
         }
-        ClassContentElement<CpmClass> elem = new ClassContentElement<CpmClass>(t, access, isStatic, line, pos);
+        ClassContentElement<CpmClass> elem = new ClassContentElement<CpmClass>(t, access, isStatic, t.fileName, t.line, t.pos);
         innerTypes.put(key, elem);
         this.visibleTypeNames.put(key, t);
     }
@@ -438,7 +443,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
             CpmClass old_entry = this.innerTypes.get(key).element;
             throw new Redefinition(s, old_entry);
         }
-        ClassContentElement<SynonymType> elem = new ClassContentElement<SynonymType>(s, access, isStatic, s.line, s.pos);
+        ClassContentElement<SynonymType> elem = new ClassContentElement<SynonymType>(s, access, isStatic, s.fileName, s.line, s.pos);
         innerSynonyms.put(key, elem);
         this.visibleTypeNames.put(key, s);
     }
@@ -462,16 +467,16 @@ public class CpmClass implements DefinesNamespace, NamedType{
             if(m1.containsKey(m.getSignature())){
                 ClassContentElement<Method> old_m = m1.get(m.getSignature());
                 String id = this.getFieldsFullName(name);
-                throw new CannotBeOverloaded(id, m, old_m.element, line, pos, old_m.line, old_m.pos);
+                throw new CannotBeOverloaded(id, m, old_m.element, line, pos, old_m.fileName, old_m.line, old_m.pos);
             }
             if(isOverrider(name, m) == true) m.setVirtual(true);
-            m1.put(m.getSignature(), new ClassContentElement<Method>(m, access, isStatic, line, pos));
+            m1.put(m.getSignature(), new ClassContentElement<Method>(m, access, isStatic, this.fileName, line, pos));
         }
         else{
             checkForConflictsInDecl(name, m, line, pos);
             checkForChangingMeaningOfType(name, m, line, pos);
             HashMap<Method.Signature, ClassContentElement<Method>> m1 = new HashMap<Method.Signature, ClassContentElement<Method>>();
-            ClassContentElement<Method> method = new ClassContentElement<Method>(m, access, isStatic, line, pos);
+            ClassContentElement<Method> method = new ClassContentElement<Method>(m, access, isStatic, this.fileName, line, pos);
             if(isOverrider(name, m) == true) m.setVirtual(true);
             m1.put(m.getSignature(), method);
             methods.put(name, m1);
@@ -526,6 +531,15 @@ public class CpmClass implements DefinesNamespace, NamedType{
     public void setLineAndPos(int line, int pos){
         this.line = line;
         this.pos = pos;
+    }
+    
+    public void setFileName(String fileName){
+        this.fileName = fileName;
+    }
+    
+    @Override
+    public String getFileName(){
+        return this.fileName;
     }
 
     public boolean isEnclosedInNamespace(DefinesNamespace namespace){

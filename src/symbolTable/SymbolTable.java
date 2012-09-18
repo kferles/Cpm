@@ -128,25 +128,25 @@ public class SymbolTable extends Namespace{
         }
     }
     
-    public void insertField(String name, Type t, boolean isStatic, int line, int pos) throws ConflictingDeclaration,
-                                                                                             ChangingMeaningOf,
-                                                                                             DiffrentSymbol {
+    public void insertField(String name, Type t, boolean isStatic, String fileName, int line, int pos) throws ConflictingDeclaration,
+                                                                                                              ChangingMeaningOf,
+                                                                                                              DiffrentSymbol {
         
         t = typeFromCache(t);
         if(this.type == ScopeType.Class){
             current_class.insertField(name, t, this.current_access, isStatic, line, pos);
         }
         else if(this.type == ScopeType.Namespace){
-            current_namespace.insertField(name, t, line, pos);
+            current_namespace.insertField(name, t, fileName, line, pos);
         }
     }
     
-    public void insertMethod(String name, Method m, boolean isStatic, int line, int pos) throws ConflictingDeclaration, 
-                                                                                                ChangingMeaningOf,
-                                                                                                CannotBeOverloaded,
-                                                                                                DiffrentSymbol,
-                                                                                                ConflictingRVforVirtual,
-                                                                                                InvalidCovariantForVirtual {
+    public void insertMethod(String name, Method m, boolean isStatic, String fileName, int line, int pos) throws ConflictingDeclaration, 
+                                                                                                                 ChangingMeaningOf,
+                                                                                                                 CannotBeOverloaded,
+                                                                                                                 DiffrentSymbol,
+                                                                                                                 ConflictingRVforVirtual,
+                                                                                                                 InvalidCovariantForVirtual {
 
         Method.Signature signature = m.getSignature();
         Type rv = signature.getReturnValue();
@@ -169,11 +169,11 @@ public class SymbolTable extends Namespace{
             current_class.insertMethod(name, m, this.current_access, isStatic, line, pos);
         }
         else if(this.type == ScopeType.Namespace){
-            current_namespace.insertMethod(name, m, line, pos);
+            current_namespace.insertMethod(name, m, fileName, line, pos);
         }
     }
     
-    public void insertInnerType(String name, CpmClass cpm_class, boolean isStatic) throws SameNameAsParentClass,
+    public CpmClass insertInnerType(String name, CpmClass cpm_class, boolean isStatic) throws SameNameAsParentClass,
                                                                                           ConflictingDeclaration,
                                                                                           Redefinition,
                                                                                           DiffrentSymbol {
@@ -184,6 +184,8 @@ public class SymbolTable extends Namespace{
         else if(this.type == ScopeType.Namespace){
             current_namespace.insertInnerType(name, cpm_class);
         }
+        
+        return cpm_class;
     }
     
     public void insertInnerSyn(String name, SynonymType syn) throws SameNameAsParentClass,
@@ -200,9 +202,14 @@ public class SymbolTable extends Namespace{
         }
     }
     
-    public void insertNamespace(String name, Namespace inner_namespace) throws ErrorMessage {
-        if(this.type == ScopeType.Class) throw new ErrorMessage("Error: this should not be happening");
-        current_namespace.insertInnerNamespace(name, inner_namespace);
+    public Namespace insertNamespace(String name, Namespace inner_namespace) throws DiffrentSymbol,
+                                                                                    ConflictingDeclaration,
+                                                                                    ChangingMeaningOf,
+                                                                                    CannotBeOverloaded,
+                                                                                    Redefinition {
+        
+        //if(this.type == ScopeType.Class) throw new ErrorMessage("Error: this should not be happening");
+        return current_namespace.insertInnerNamespace(name, inner_namespace);
     }
     
     public DefinesNamespace getCurrentNamespace(){

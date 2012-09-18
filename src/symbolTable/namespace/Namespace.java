@@ -41,16 +41,21 @@ public class Namespace implements DefinesNamespace{
     
     Namespace belongsTo;
     
+    String fileName;
+    
     int line, pos;
     
         private class NamespaceElement <T>{
             
             T element;
             
+            String fileName;
+            
             int line, pos;
             
-            public NamespaceElement(T element, int line, int pos){
+            public NamespaceElement(T element, String fileName, int line, int pos){
                 this.element = element;
+                this.fileName = fileName;
                 this.line = line;
                 this.pos = pos;
             }
@@ -72,7 +77,7 @@ public class Namespace implements DefinesNamespace{
         if(this.allSymbols.containsKey(name) == true){
             NamespaceElement<? extends Type> old_entry = this.allSymbols.get(name);
             String id = this.getFieldsFullName(name);
-            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.line, old_entry.pos);
+            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.fileName, old_entry.line, old_entry.pos);
         }
     }
     
@@ -80,7 +85,7 @@ public class Namespace implements DefinesNamespace{
         if(this.allSymbols.containsKey(name) == true){
             NamespaceElement<? extends Type> old_entry = this.allSymbols.get(name);
             String id = this.getFieldsFullName(name);
-            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.line, old_entry.pos);
+            throw new ConflictingDeclaration(id, t, old_entry.element, line, pos, old_entry.fileName, old_entry.line, old_entry.pos);
         }
     }
     
@@ -88,7 +93,7 @@ public class Namespace implements DefinesNamespace{
         if(this.allSymbols.containsKey(name) == true){
             NamespaceElement<? extends Type> old_entry = this.allSymbols.get(name);
             String id = this.getFieldsFullName(name);
-            throw new DiffrentSymbol(id, namespace, old_entry.element, line, pos, old_entry.line, old_entry.pos);
+            throw new DiffrentSymbol(id, namespace, old_entry.element, line, pos, old_entry.fileName, old_entry.line, old_entry.pos);
         }
     }
     
@@ -127,23 +132,23 @@ public class Namespace implements DefinesNamespace{
         }
     }
     
-    public void insertField(String name, Type t, int line, int pos) throws ConflictingDeclaration, 
-                                                                           ChangingMeaningOf,
-                                                                           DiffrentSymbol {
+    public void insertField(String name, Type t, String fileName, int line, int pos) throws ConflictingDeclaration, 
+                                                                                            ChangingMeaningOf,
+                                                                                            DiffrentSymbol {
         
         if(fields == null) fields = new HashMap<String, NamespaceElement<Type>>();
         this.checkForConflictsInDecl(name, t, line, pos);
         this.checkForChangingMeaningOfType(name, t, line, pos);
         this.checkForConflictsWithNamespaces(name, t, line, pos);
-        NamespaceElement<Type> elem = new NamespaceElement<Type>(t, line, pos);
+        NamespaceElement<Type> elem = new NamespaceElement<Type>(t, fileName, line, pos);
         fields.put(name, elem);
         insertInAllSymbols(name, elem);
     }
     
-    public void insertMethod(String name, Method m, int line, int pos) throws CannotBeOverloaded,
-                                                                              ConflictingDeclaration,
-                                                                              ChangingMeaningOf,
-                                                                              DiffrentSymbol {
+    public void insertMethod(String name, Method m, String fileName, int line, int pos) throws CannotBeOverloaded,
+                                                                                               ConflictingDeclaration,
+                                                                                               ChangingMeaningOf,
+                                                                                               DiffrentSymbol {
         
         if(methods == null) methods = new HashMap<String, HashMap<Method.Signature, NamespaceElement<Method>>>();
         if(methods.containsKey(name) == true){
@@ -151,16 +156,16 @@ public class Namespace implements DefinesNamespace{
             if(ms.containsKey(m.getSignature())){
                 NamespaceElement<Method> old_m = ms.get(m.getSignature());
                 String id = this.getFieldsFullName(name);
-                throw new CannotBeOverloaded(id, m, old_m.element, line, pos, old_m.line, old_m.pos);
+                throw new CannotBeOverloaded(id, m, old_m.element, line, pos, old_m.fileName, old_m.line, old_m.pos);
             }
-            ms.put(m.getSignature(), new NamespaceElement<Method>(m, line, pos));
+            ms.put(m.getSignature(), new NamespaceElement<Method>(m, fileName, line, pos));
         }
         else{
             this.checkForConflictsInDecl(name, m, line, pos);
             this.checkForChangingMeaningOfType(name, m, line, pos);
             this.checkForConflictsWithNamespaces(name, m, line, pos);
             HashMap<Method.Signature, NamespaceElement<Method>> new_entry = new HashMap<Method.Signature, NamespaceElement<Method>>();
-            NamespaceElement<Method> elem = new NamespaceElement<Method>(m, line, pos);
+            NamespaceElement<Method> elem = new NamespaceElement<Method>(m, fileName, line, pos);
             new_entry.put(m.getSignature(), elem);
             methods.put(name, new_entry);
             insertInAllSymbols(name, elem);
@@ -177,7 +182,7 @@ public class Namespace implements DefinesNamespace{
         if(innerTypes.containsKey(name) == true){
             CpmClass t1 = innerTypes.get(name).element;
             if(t1.isComplete() == false){
-                innerTypes.put(name, new NamespaceElement<CpmClass>(t, t.line, t.pos));
+                innerTypes.put(name, new NamespaceElement<CpmClass>(t, t.fileName, t.line, t.pos));
             }
             else if(t.isComplete() == true){
                 throw new Redefinition(t, t1);
@@ -188,7 +193,7 @@ public class Namespace implements DefinesNamespace{
             NamespaceElement<SynonymType> old_entry = this.innerSynonynms.get(name);
             throw new Redefinition(t, old_entry.element);
         }
-        innerTypes.put(name, new NamespaceElement<CpmClass>(t, t.line, t.pos));
+        innerTypes.put(name, new NamespaceElement<CpmClass>(t, t.fileName, t.line, t.pos));
         this.visibleTypeNames.put(name, t);
     }
     
@@ -207,11 +212,11 @@ public class Namespace implements DefinesNamespace{
             NamespaceElement<CpmClass> old_entry = this.innerTypes.get(name);
             throw new Redefinition(syn, old_entry.element);
         }
-        this.innerSynonynms.put(name,  new NamespaceElement<SynonymType>(syn, syn.line, syn.pos));
+        this.innerSynonynms.put(name,  new NamespaceElement<SynonymType>(syn, syn.fileName, syn.line, syn.pos));
         this.visibleTypeNames.put(name, syn);
     }
     
-    public void insertInnerNamespace(String name, Namespace namespace) throws DiffrentSymbol,
+    public Namespace insertInnerNamespace(String name, Namespace namespace) throws DiffrentSymbol,
                                                                               ConflictingDeclaration,
                                                                               ChangingMeaningOf,
                                                                               CannotBeOverloaded,
@@ -229,19 +234,22 @@ public class Namespace implements DefinesNamespace{
             String id = this.getFieldsFullName(name);
             throw new DiffrentSymbol(id, namespace, old_entry.element, namespace.line, namespace.pos, old_entry.line, old_entry.pos);
         }
+        Namespace rv;
         if(!innerNamespaces.containsKey(name)){
-            innerNamespaces.put(name, new NamespaceElement<Namespace>(namespace, namespace.line, namespace.pos));
+            innerNamespaces.put(name, new NamespaceElement<Namespace>(namespace, namespace.fileName, namespace.line, namespace.pos));
+            rv = namespace;
         }
         else{
             /*
              * merging the existing namespace with the extension declaration.
              */
-            Namespace exists = innerNamespaces.get(name).element;
+            rv = innerNamespaces.get(name).element;
+            /*
             if(namespace.fields != null){
                 for(String key : namespace.fields.keySet()){
                     NamespaceElement<Type> elem = namespace.fields.get(key);
                     Type t = elem.element;
-                    exists.insertField(name, t, elem.line, elem.pos);
+                    exists.insertField(name, t, namespace.fileName, elem.line, elem.pos);
                 }
             }
             if(namespace.methods != null){
@@ -254,9 +262,9 @@ public class Namespace implements DefinesNamespace{
             }
             if(namespace.innerNamespaces != null){
                 for(String key : namespace.innerNamespaces.keySet()){
-                    /*
-                     * merge again all the inner namespaces.
-                     */
+                    ///*
+                     //* merge again all the inner namespaces.
+                     //
                     NamespaceElement<Namespace> n = namespace.innerNamespaces.get(key);
                     exists.insertInnerNamespace(key, n.element);
                 }
@@ -272,13 +280,22 @@ public class Namespace implements DefinesNamespace{
                     NamespaceElement<SynonymType> syn = namespace.innerSynonynms.get(key);
                     exists.insertInnerSynonym(key, syn.element);
                 }
-            }
+            }*/
         }
+        return rv;
     }
     
     public void setLineAndPos(int line, int pos){
         this.line = line;
         this.pos = pos;
+    }
+    
+    public void setFileName(String fileName){
+        this.fileName = fileName;
+    }
+    
+    public String getFileName(){
+        return this.fileName;
     }
     
     @Override

@@ -16,7 +16,7 @@ public class Redefinition extends ErrorMessage{
     
     public Redefinition(NamedType new_entry, NamedType old_entry){
         super("line " + new_entry.getLine() + ":" + new_entry.getPosition() + " error: redefinition of '" + new_entry + "'" );
-        this.final_err = "line " + old_entry.getLine() + ":" + old_entry.getPosition() + " error: previous definition of '" + old_entry + "'";
+        this.final_err = old_entry.getFileName() + " line " + old_entry.getLine() + ":" + old_entry.getPosition() + " error: previous definition of '" + old_entry + "'";
     }
     
     public String getFinalError(){

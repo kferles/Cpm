@@ -30,12 +30,12 @@ public class AmbiguousReference extends ErrorMessage {
         super("");
         this.referenced_type = referenced_type;
         NamedType firstClass = candidates.get(0);
-        lines_errors.add("line " + firstClass.getLine() + ":" + firstClass.getPosition()
-                                 + " error: candidates are: " + firstClass.toString() + "\n");
+        lines_errors.add(firstClass.getFileName() + " line " + firstClass.getLine() + ":" + firstClass.getPosition()
+                                + " error: candidates are: " + firstClass.toString() + "\n");
         for(int i = 1 ; i < candidates.size() ; ++i){
             NamedType _class = candidates.get(i);
-            lines_errors.add("line " + _class.getLine() + ":" + _class.getPosition()
-                                     + " error:                 " + _class.toString() + "\n");
+            lines_errors.add(_class.getFileName() + " line " + _class.getLine() + ":" + _class.getPosition()
+                                                  + " error:                 " + _class.toString() + "\n");
         }
     }
     
@@ -43,12 +43,11 @@ public class AmbiguousReference extends ErrorMessage {
         this.last_valid = last_valid;
     }
     
-    public String getMessage(String filename){
+    @Override
+    public String getMessage(){
         StringBuilder rv = new StringBuilder();
-        filename = filename + " ";
         
         for(String line : lines_errors){
-            rv.append(filename);
             rv.append(line);
         }
         

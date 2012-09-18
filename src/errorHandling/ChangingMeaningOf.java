@@ -17,7 +17,7 @@ public class ChangingMeaningOf extends ErrorMessage {
     
     public ChangingMeaningOf(String id, String name, Type field, NamedType type, int line, int pos){
         super("line " + line + ":" + pos + " error: declaration of '" + field.toString(id) + '\'');
-        final_err = "line " + type.getLine() + ":" + type.getPosition() + " error: changes meaning of '" + name + "' from '" + type + '\'';
+        final_err = type.getFileName() + " line " + type.getLine() + ":" + type.getPosition() + " error: changes meaning of '" + name + "' from '" + type + '\'';
     }
     
     public String getFinalError(){

@@ -170,8 +170,8 @@ import preprocessor.*;
 		if(pending_ambiguous != null){
 			AmbiguousReference temp = pending_ambiguous;
 			pending_ambiguous = null;
-			yield_error(temp.getRefError());
-		  	System.err.print(temp.getMessage(this.getSourceName()));
+			yield_error(temp.getRefError(), true);
+		  	System.err.print(temp.getMessage());
 		  	return temp.getLastLine();
 		}
 		return super.getErrorMessage(e, tokenNames);
@@ -187,9 +187,11 @@ import preprocessor.*;
 		return this.preproc.getOriginalFileLine(t.getLine());
 	}
 	
-	private void yield_error(String error){
-		String fileName = this.getSourceName();
-		error = fileName + " " + error;
+	private void yield_error(String error, boolean need_file_name){
+		if(need_file_name){
+			String fileName = this.getSourceName();
+			error = fileName + " " + error;
+		}
 		System.err.println(error);
 	} 
 	
@@ -544,15 +546,15 @@ import preprocessor.*;
 		}
 		catch(AccessSpecViolation access_viol){
 			//if chain size is 1 the error must be pending
-	  		yield_error(access_viol.getMessage());
-	  		yield_error(access_viol.getContextError());
+	  		yield_error(access_viol.getMessage(), false);
+	  		yield_error(access_viol.getContextError(), true);
 	  		already_failed = true;
 	  	}
 	  	catch(AmbiguousReference ambiguous){
 	  		if(ambiguous.isPending() == false){
-		  		yield_error(ambiguous.getRefError());
-		  		System.err.print(ambiguous.getMessage(this.getSourceName()));
-		  		yield_error(ambiguous.getLastLine());
+		  		yield_error(ambiguous.getRefError(), true);
+		  		System.err.print(ambiguous.getMessage());
+		  		yield_error(ambiguous.getLastLine(), true);
 		  		already_failed = true;
 	  		}
 	  		else{
@@ -560,15 +562,16 @@ import preprocessor.*;
 	  		}
 	  	}
 	  	catch(NotDeclared nodeclared){
-  			yield_error(nodeclared.getMessage());
+  			yield_error(nodeclared.getMessage(), true);
   			already_failed = true;
 	  	}
 	  	catch(InvalidScopeResolution invalid){
-	  		yield_error(invalid.getMessage());
+	  		yield_error(invalid.getMessage(), true);
 	  		already_failed = true;
 	  	}
 	  	catch(DoesNotNameType nt){
 	  		pending_undeclared_err = nt.getMessage();
+	  		already_failed = true;	//check this one
 	  	}
 	  	
 	  	return t == null ? false : true;
@@ -584,14 +587,14 @@ import preprocessor.*;
 			}
 		}
 		catch(AccessSpecViolation access_viol){
-	  		yield_error(access_viol.getMessage());
-	  		yield_error(access_viol.getContextError());
+	  		yield_error(access_viol.getMessage(), false);
+	  		yield_error(access_viol.getContextError(), true);
 	  	}
 	  	catch(AmbiguousReference ambiguous){
 	  		if(ambiguous.isPending() == false){
-		  		yield_error(ambiguous.getRefError());
-		  		System.err.print(ambiguous.getMessage(this.getSourceName()));
-		  		yield_error(ambiguous.getLastLine());
+		  		yield_error(ambiguous.getRefError(), true);
+		  		System.err.print(ambiguous.getMessage());
+		  		yield_error(ambiguous.getLastLine(), true);
 	  		}
 	  		else{
 	  			throw new Exception("error: expected class-name before '" + token + "'");
@@ -764,27 +767,29 @@ import preprocessor.*;
 	
 	//insert into current scope
 	
-	private void insertClass(String name, CpmClass cpm_class){
+	private CpmClass insertClass(String name, CpmClass cpm_class){
+		CpmClass rv = null;
 		try{
 			//for now static will be false for all types
 			//if there is an actuall diff for static specifier i'll change this one
-			this.symbolTable.insertInnerType(name, cpm_class, false);
+			rv = this.symbolTable.insertInnerType(name, cpm_class, false);
 		}
 		catch(SameNameAsParentClass same_name){
-			this.yield_error(same_name.getMessage());
+			this.yield_error(same_name.getMessage(), true);
 		}
 		catch(ConflictingDeclaration conflict){
-			this.yield_error(conflict.getMessage());
-			this.yield_error(conflict.getFinalError());
+			this.yield_error(conflict.getMessage(), true);
+			this.yield_error(conflict.getFinalError(), false);
 		}
 		catch(Redefinition redef){
-			this.yield_error(redef.getMessage());
-			this.yield_error(redef.getFinalError());
+			this.yield_error(redef.getMessage(), true);
+			this.yield_error(redef.getFinalError(), false);
 		}
 		catch(DiffrentSymbol diff){
-			this.yield_error(diff.getMessage());
-			this.yield_error(diff.getFinalError());
+			this.yield_error(diff.getMessage(), true);
+			this.yield_error(diff.getFinalError(), false);
 		}
+		return rv;
 	}
 	
 	private void insertSynonym(String declarator_id, Type data_type, int id_line, int id_pos, InClassDeclSpec class_specs){
@@ -807,19 +812,19 @@ import preprocessor.*;
 			}
 		}
 		catch(SameNameAsParentClass sameName){
-			this.yield_error(sameName.getMessage());
+			this.yield_error(sameName.getMessage(), true);
 		}
                 catch(ConflictingDeclaration conflict){
-                	this.yield_error(conflict.getMessage());
-                	this.yield_error(conflict.getFinalError());
+                	this.yield_error(conflict.getMessage(), true);
+                	this.yield_error(conflict.getFinalError(), false);
                 }
                 catch(Redefinition redef){
-                	this.yield_error(redef.getMessage());
-                	this.yield_error(redef.getFinalError());
+                	this.yield_error(redef.getMessage(), true);
+                	this.yield_error(redef.getFinalError(), false);
                 }
                 catch(DiffrentSymbol diffSymbol){
-                	this.yield_error(diffSymbol.getMessage());
-                	this.yield_error(diffSymbol.getFinalError());
+                	this.yield_error(diffSymbol.getMessage(), true);
+                	this.yield_error(diffSymbol.getFinalError(), false);
                 }
 	}
 	
@@ -839,7 +844,7 @@ import preprocessor.*;
 				}
 				
 				if(t.isComplete(currentClass) == true){
-					this.symbolTable.insertField(declarator_id, t, class_specs.isStatic, id_line, id_pos);
+					this.symbolTable.insertField(declarator_id, t, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos);
 				}
 				else{
 					this.yield_error("error: field '" + declarator_id + "' has incomplete type", id_line, id_pos);
@@ -847,16 +852,16 @@ import preprocessor.*;
 			}
 		}
 		catch(ConflictingDeclaration conflict){
-                	this.yield_error(conflict.getMessage());
-                	this.yield_error(conflict.getFinalError());
+                	this.yield_error(conflict.getMessage(), true);
+                	this.yield_error(conflict.getFinalError(), false);
                 }
                 catch(DiffrentSymbol diffSymbol){
-                	this.yield_error(diffSymbol.getMessage());
-                	this.yield_error(diffSymbol.getFinalError());
+                	this.yield_error(diffSymbol.getMessage(), true);
+                	this.yield_error(diffSymbol.getFinalError(), false);
                 }
                 catch(ChangingMeaningOf changeMean){
-                	this.yield_error(changeMean.getMessage());
-                	this.yield_error(changeMean.getFinalError());
+                	this.yield_error(changeMean.getMessage(), true);
+                	this.yield_error(changeMean.getFinalError(), false);
                 }
                 catch(VoidDeclaration v_decl){
                 	this.yield_error(v_decl.getMessage(declarator_id), id_line, id_pos);
@@ -871,32 +876,32 @@ import preprocessor.*;
 			}
 			else{
 				m.setVirtual(class_specs.isVirtual);
-				this.symbolTable.insertMethod(declarator_id, m, class_specs.isStatic, id_line, id_pos);
+				this.symbolTable.insertMethod(declarator_id, m, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos);
 			}
 		}
 		catch(ConflictingDeclaration conflict){
-                	this.yield_error(conflict.getMessage());
-                	this.yield_error(conflict.getFinalError());
+                	this.yield_error(conflict.getMessage(), true);
+                	this.yield_error(conflict.getFinalError(), false);
                 } 
                 catch(ChangingMeaningOf changeMean){
-                	this.yield_error(changeMean.getMessage());
-                	this.yield_error(changeMean.getFinalError());
+                	this.yield_error(changeMean.getMessage(), true);
+                	this.yield_error(changeMean.getFinalError(), false);
                 }
                 catch(CannotBeOverloaded cBeoverld){
-                	this.yield_error(cBeoverld.getMessage());
-                	this.yield_error(cBeoverld.getFinalError());
+                	this.yield_error(cBeoverld.getMessage(), true);
+                	this.yield_error(cBeoverld.getFinalError(), false);
                 }
                 catch(DiffrentSymbol diffSymbol){
-                	this.yield_error(diffSymbol.getMessage());
-                	this.yield_error(diffSymbol.getFinalError());
+                	this.yield_error(diffSymbol.getMessage(), true);
+                	this.yield_error(diffSymbol.getFinalError(), false);
                 }
                 catch(ConflictingRVforVirtual confRv){
-                	this.yield_error(confRv.getMessage(id_line, id_pos));
-                	this.yield_error(confRv.getFinalError());
+                	this.yield_error(confRv.getMessage(id_line, id_pos), true);
+                	this.yield_error(confRv.getFinalError(), false);
                 }
                 catch(InvalidCovariantForVirtual invalidCovariant){
-                	this.yield_error(invalidCovariant.getMessage(id_line, id_pos));
-                	this.yield_error(invalidCovariant.getFinalError());
+                	this.yield_error(invalidCovariant.getMessage(id_line, id_pos), true);
+                	this.yield_error(invalidCovariant.getFinalError(), false);
                 }
 	
 	}
@@ -1153,12 +1158,12 @@ function_specifier
 	  { explicit_count_error() == true }?
 	;
 	
-class_init_declarator_list[String error, Type data_type, InClassDeclSpec class_specs]
-@init{
-	this.normal_mode = true;
-}
-	: init_declarator_list[$error, $data_type, $class_specs]?
-	;
+//class_init_declarator_list[String error, Type data_type, InClassDeclSpec class_specs]
+//@init{
+//	this.normal_mode = true;
+//}
+//	: init_declarator_list[$error, $data_type, $class_specs]?
+//	;
 
 init_declarator_list [String error, Type data_type, InClassDeclSpec class_specs]
 	: init_declarator [$error, $data_type, $class_specs] (',' init_declarator[$error, $data_type, $class_specs])*
@@ -1409,8 +1414,8 @@ struct_union_or_class_specifier
 	  		
 	  	}
 	  	catch(AccessSpecViolation access_viol){
-	  		yield_error(access_viol.getMessage());
-	  		yield_error(access_viol.getContextError());
+	  		yield_error(access_viol.getMessage(), false);
+	  		yield_error(access_viol.getContextError(), true);
 	  	}
 	  	catch(AmbiguousReference ambiguous){
 	  		if($nested_name_id.names_chain.size() == 1){
@@ -1429,16 +1434,16 @@ struct_union_or_class_specifier
 	  			this.insertClass(name, _class);
 	  		}
 	  		else{
-		  		yield_error(ambiguous.getRefError());
-		  		System.err.print(ambiguous.getMessage(this.getSourceName()));
-		  		yield_error(ambiguous.getLastLine());
+		  		yield_error(ambiguous.getRefError(), true);
+		  		System.err.print(ambiguous.getMessage());
+		  		yield_error(ambiguous.getLastLine(), true);
 	  		}
 	  	}
 	  	catch(NotDeclared nodeclared){
-  			yield_error(nodeclared.getMessage());
+  			yield_error(nodeclared.getMessage(), true);
 	  	}
 	  	catch(InvalidScopeResolution invalid){
-	  		yield_error(invalid.getMessage());
+	  		yield_error(invalid.getMessage(), true);
 	  	}
 	  	catch(DoesNotNameType _){
 	  		//not possible
@@ -1486,13 +1491,19 @@ scope collect_base_classes;
 	  	}
 	  	$struct_union_or_class_definition::t = new UserDefinedType(_class, false, false);
 	  	_class.setLineAndPos(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
-	  	this.insertClass(name, _class);
-	  	this.symbolTable.setCurrentScope(_class);
-	  	if(tag.equals("struct") == true || tag.equals("union") == true){
-	  		this.symbolTable.setCurrentAccess(CpmClass.AccessSpecifier.Public);
+	  	_class.setFileName(this.preproc.getCurrentFileName());
+	  	CpmClass current_class = this.insertClass(name, _class);
+	  	if(current_class != null){
+		  	this.symbolTable.setCurrentScope(_class);
+		  	if(tag.equals("struct") == true || tag.equals("union") == true){
+		  		this.symbolTable.setCurrentAccess(CpmClass.AccessSpecifier.Public);
+		  	}
+		  	else {
+		  		this.symbolTable.setCurrentAccess(CpmClass.AccessSpecifier.Private);
+		  	}
 	  	}
-	  	else {
-	  		this.symbolTable.setCurrentAccess(CpmClass.AccessSpecifier.Private);
+	  	else{
+	  		this.normal_mode = false;
 	  	}
 	  }
 	   // todo : init_declarator_list parameters
@@ -1500,7 +1511,7 @@ scope collect_base_classes;
   	  {
   	  	this.symbolTable.endScope();
   	  }
-  	  init_declarator_list[null, $struct_union_or_class_definition::t, new InClassDeclSpec(false, false, false)]?
+  	  init_declarator_list[null, $struct_union_or_class_definition::t, new InClassDeclSpec(false, false, false)]? turn_on_normal_mode
 	;
 	
 extern_class_definition
@@ -1537,7 +1548,8 @@ scope collect_base_classes;
 				if(_class.isEnclosedInNamespace(current) == true){
 					if(_class.isComplete() == true){
 						this.yield_error("error: redefinition of '" + _class + "'", line, pos);
-						this.yield_error("error: previous definition of '" + _class + "'", _class.getLine(), _class.getPosition());
+						this.yield_error(_class.getFileName() + " line " + _class.getLine() + ":" + _class.getPosition() 
+										      + " error: previous definition of '" + _class + "'", false);
 					}
 					else{
 						String tag = $struct_union_or_class.start.getText();
@@ -1546,6 +1558,7 @@ scope collect_base_classes;
 								   $struct_union_or_class.start.getCharPositionInLine()) == true){
 
 							_class.setIsComplete(true);
+							_class.setFileName(this.preproc.getCurrentFileName());
 							_class.setLineAndPos(line, pos);
 							_class.setTag(tag);
 							this.symbolTable.setCurrentScope(_class);
@@ -1592,7 +1605,14 @@ scope collect_base_classes;
 	  {
   	  	this.symbolTable.endScope();
   	  }
-  	  class_init_declarator_list[null, $extern_class_definition::t, new InClassDeclSpec(false, false, false)]
+  	  init_declarator_list[null, $extern_class_definition::t, new InClassDeclSpec(false, false, false)]? turn_on_normal_mode
+	;
+	
+turn_on_normal_mode
+@init{
+	this.normal_mode = true;
+}
+	:
 	;
 
 base_class_list

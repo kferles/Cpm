@@ -13,10 +13,12 @@ import symbolTable.types.Method;
 public class ConflictingRVforVirtual extends ErrorMessage{
     String message;
     String final_error;
+    String fileName;
     
-    public ConflictingRVforVirtual(String name, Method der, Method base){
+    public ConflictingRVforVirtual(String name, Method der, Method base, String baseFileName){
         super("error: conflicting return type specified for 'virtual " + der.toString(ErrorMessage.getFullName(der, name)) + "'");
         this.final_error = "error: overriding '" + base.toString(ErrorMessage.getFullName(base, name)) +"'";
+        this.fileName = baseFileName;
     }
     
     public String getMessage(int der_line, int der_pos){
@@ -28,7 +30,7 @@ public class ConflictingRVforVirtual extends ErrorMessage{
     }
     
     public void setLineAndPos(int base_line, int base_pos){
-        this.final_error = "line " + base_line + ":" + base_pos + " " + this.final_error;
+        this.final_error = fileName + "line " + base_line + ":" + base_pos + " " + this.final_error;
     }
 
 }
