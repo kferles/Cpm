@@ -102,12 +102,16 @@ import symbolTable.SymbolTable;
 import symbolTable.types.*;
 import symbolTable.namespace.*;
 import errorHandling.*;
+import preprocessor.*;
 }
 
-@members {
+@parser::members {
 
 	//Symbol Table
 	private SymbolTable symbolTable = new SymbolTable();
+	
+	//Preprocessor Information
+	PreprocessorInfo preproc = new PreprocessorInfo();
 
 	//error messages
 	
@@ -137,21 +141,15 @@ import errorHandling.*;
 	
 	//to change the name of the file when i'll use the cpp utility
 	//just override this on
-	/*public String getSourceName(){
-		return "Original Filename";
-	}*/
-	
-	/*protected Object recoverFromMismatchedToken(IntStream input,
-                                            int ttype,
-                                            BitSet follow) throws RecognitionException
-	{   
-	    throw new MismatchedTokenException(ttype, input);
-	}   */
+	public String getSourceName(){
+		return this.preproc.getCurrentFileName();
+	}
 
 	public void displayRecognitionError(String[] tokenNames, RecognitionException e) {
 		//Change line number in error reporting HERE !!!!
-		//e.line++;
 		//System.out.println(e.input.getSourceName());
+		System.err.print(this.preproc.getHeaderError());
+		e.line = this.preproc.getOriginalFileLine(e.line);
 		super.displayRecognitionError(tokenNames, e);
         }
 	
@@ -186,7 +184,7 @@ import errorHandling.*;
 	}
 	
 	private int fixLine(Token t){
-		return t.getLine();
+		return this.preproc.getOriginalFileLine(t.getLine());
 	}
 	
 	private void yield_error(String error){
@@ -198,6 +196,7 @@ import errorHandling.*;
 	private void yield_error(String error, int line, int position){
 		String fileName = this.getSourceName();
 		error = fileName + " line " + line + ":" + position + " " + error;
+		System.err.print(this.preproc.getHeaderError());
 		System.err.println(error);
 	}
 	
@@ -544,6 +543,7 @@ import errorHandling.*;
 			else if(t == null) already_failed = true;
 		}
 		catch(AccessSpecViolation access_viol){
+			//if chain size is 1 the error must be pending
 	  		yield_error(access_viol.getMessage());
 	  		yield_error(access_viol.getContextError());
 	  		already_failed = true;
@@ -833,7 +833,17 @@ import errorHandling.*;
 				this.yield_error("error: only declarations of constructors can be 'explicit'", id_line, id_pos);
 			}
 			else{
-				this.symbolTable.insertField(declarator_id, t, class_specs.isStatic, id_line, id_pos);
+				CpmClass currentClass = null;
+				if(this.symbolTable.isCurrentNamespaceClass() == true){
+					currentClass = (CpmClass) this.symbolTable.getCurrentNamespace();
+				}
+				
+				if(t.isComplete(currentClass) == true){
+					this.symbolTable.insertField(declarator_id, t, class_specs.isStatic, id_line, id_pos);
+				}
+				else{
+					this.yield_error("error: field '" + declarator_id + "' has incomplete type", id_line, id_pos);
+				}
 			}
 		}
 		catch(ConflictingDeclaration conflict){
@@ -848,18 +858,19 @@ import errorHandling.*;
                 	this.yield_error(changeMean.getMessage());
                 	this.yield_error(changeMean.getFinalError());
                 }
+                catch(VoidDeclaration v_decl){
+                	this.yield_error(v_decl.getMessage(declarator_id), id_line, id_pos);
+                }
 	}
 	
 	private void insertMethod(String declarator_id, Method m, int id_line, int id_pos, InClassDeclSpec class_specs){
 	
 		try{
-			if(class_specs.isVirtual == true && this.symbolTable.isCurrentNamespaceClass() == false){
-				this.yield_error("error: '" + declarator_id + "' declared as virtual type", id_line, id_pos);
-			}
-			else if(class_specs.isExplicit == true){
+			if(class_specs.isExplicit == true){
 				this.yield_error("error: only declarations of constructors can be 'explicit'", id_line, id_pos);
 			}
 			else{
+				m.setVirtual(class_specs.isVirtual);
 				this.symbolTable.insertMethod(declarator_id, m, class_specs.isStatic, id_line, id_pos);
 			}
 		}
@@ -893,6 +904,12 @@ import errorHandling.*;
 	//end insert into current scope
 
 	boolean normal_mode = true;
+
+}
+
+@lexer::members{
+
+	boolean ignore_ws = true;
 
 }
 
@@ -967,6 +984,7 @@ scope{
 	| (struct_union_or_class nested_name_id '{') => extern_class_definition ';'
 	|'typedef' { $declaration::isTypedef = true; } simple_declaration ';' // special case, looking for typedef	
 	| simple_declaration ';'
+	| line_marker
 	;
  
 simple_declaration
@@ -1076,7 +1094,7 @@ scope function_spec;
              	$class_specs = new InClassDeclSpec(fun_specs.virtualCount != 0 ? true : false,
              					   fun_specs.explicitCount != 0 ? true : false,
              					   storage_specs.staticCount != 0 ? true : false );
-             	
+                             	
              	//count for data types in declarations specifiers
              	int countTypes = 0;
              	for(boolean t : type_specs.type) if(t == true) ++countTypes;
@@ -1145,7 +1163,7 @@ class_init_declarator_list[String error, Type data_type, InClassDeclSpec class_s
 init_declarator_list [String error, Type data_type, InClassDeclSpec class_specs]
 	: init_declarator [$error, $data_type, $class_specs] (',' init_declarator[$error, $data_type, $class_specs])*
 	;
-	
+
 init_declarator [String error, Type data_type, InClassDeclSpec class_specs]
 scope declarator_strings;
 scope decl_infered;
@@ -1156,8 +1174,7 @@ scope decl_id_info;
 	$decl_infered::declarator = null;
 }
 	: declarator ('=' initializer)?
-	  {
-	  	//TODO: class_specs (set and/or error messages)
+	  {	//todo: error for typedef with initializer
 	  	if($data_type != null){
 		  	DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
 		  	String declarator_id = $declarator_strings::dir_decl_identifier;
@@ -1213,13 +1230,14 @@ scope decl_id_info;
 			  			
 			  		}
 			  		else if(decl_inf_t.ar_rv != null){
-			  			System.out.println(decl_inf_t.ar_rv.toString(declarator_id));
+			  			CpmArray ar = decl_inf_t.ar_rv;
+			  			System.out.println(ar.toString(declarator_id));
 			  			if($declaration.size() > 0 && $declaration::isTypedef == true){
-				  			this.insertSynonym(declarator_id, decl_inf_t.ar_rv, id_line, id_pos, $class_specs);
+				  			this.insertSynonym(declarator_id, ar, id_line, id_pos, $class_specs);
 				  		}
 				  		else{
 			  				if(this.symbolTable.isCurrentNamespaceClass() == true){
-			  					this.insertField(declarator_id, decl_inf_t.ar_rv, id_line, id_pos, $class_specs);
+			  					this.insertField(declarator_id, ar, id_line, id_pos, $class_specs);
 			  				}
 				  		}
 			  		}
@@ -2127,18 +2145,17 @@ unary_operator
 	;
 
 constant
- //options{greedy = true;}
-    :   (ZERO | DECIMAL_LITERAL)  IntegerTypeSuffix?
-    |   HEX_LITERAL IntegerTypeSuffix?
-    |   OCTAL_LITERAL IntegerTypeSuffix?
+    :   HEX_LITERAL
+    |   OCTAL_LITERAL
+    |   DECIMAL_LITERAL
     |	CHARACTER_LITERAL
     |	STRING_LITERAL
     |   FLOATING_POINT_LITERAL
     ;
     
 primary_expression
-	: IDENTIFIER // --> nested_name_id
-	| constant
+	: constant
+	| IDENTIFIER // --> nested_name_id
 	| 'this'
 	| '(' expression ')'
 	;
@@ -2268,11 +2285,71 @@ jump_statement
 	| 'return' ';'
 	| 'return' expression ';'
 	;
+	
+//Preprocessor
+
+/*
+ * Instead of explicitly put 1,2,3,4 as flags
+ * I put DECIMAL_LITERAL lexer rule because 
+ * there is obviosly a conflict between these two.
+ * And of course in this phase the output would be correct,
+ * because it comes from cpp
+ */
+ 
+line_marker
+scope{
+	boolean is_enter;
+	boolean is_exit;
+}
+@init{
+	$line_marker::is_enter = false;
+	$line_marker::is_exit = false;
+}
+	: h_tag = '#' DECIMAL_LITERAL STRING_LITERAL line_marker_flags? { String file = $STRING_LITERAL.text;
+									  file = file.substring(1, file.length() - 1);
+									  int baseLine = Integer.parseInt($DECIMAL_LITERAL.text);
+									  int preprocLine = $h_tag.line;
+									  //ignore preproc useless stuff 
+									  if(file.equals("<built-in>") == false && file.equals("<command-line>") == false){
+										  if($line_marker::is_enter == true){
+										  	this.preproc.enterIncludedFile(file, 
+										  				       baseLine,
+										  				       preprocLine,
+										  				       this.fixLine($h_tag));
+										  }
+										  else if($line_marker::is_exit == true){
+										  	this.preproc.exitIncludedFile(baseLine, preprocLine);
+										  }
+										  else{
+										  	this.preproc.enterIncludedFile(file,
+										  				       baseLine,
+										  				       preprocLine,
+										  				       preprocLine);
+										  }
+									  }
+									}
+	;
+
+line_marker_flags
+	: DECIMAL_LITERAL
+	  {
+	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
+	  	if(flag == 1) $line_marker::is_enter = true;
+	  	else if(flag == 2) $line_marker::is_exit = true;
+	  }
+	  line_marker_flags
+	| DECIMAL_LITERAL
+	  {
+	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
+	  	if(flag == 1) $line_marker::is_enter = true;
+	  	else if(flag == 2) $line_marker::is_exit = true;
+	  }
+	;
 
 IDENTIFIER
-	:	LETTER (LETTER|'0'..'9')* 
+	:	LETTER (LETTER|'0'..'9')*
 	;
-	
+
 fragment
 LETTER
 	:	'$'
@@ -2289,23 +2366,26 @@ STRING_LITERAL
     :  '"' ( EscapeSequence | ~('\\'|'"') )* '"'
     ;
 
-HEX_LITERAL : '0' ('x'|'X') HexDigit+;
+fragment
+ZERO 	: '0';
+DECIMAL_LITERAL
+	: (ZERO | '1'..'9' '0'..'9'*) IntegerTypeSuffix?
+	;
 
+OCTAL_LITERAL : '0' ('0'..'7')+ IntegerTypeSuffix?
+	      ;
 
-ZERO 	: '0' ;
-
-DECIMAL_LITERAL : ('0'  | ('1'..'9') ('0'..'9')*);
-
-OCTAL_LITERAL : '0' ('0'..'7')+;
+HEX_LITERAL : '0' ('x'|'X') HexDigit+ IntegerTypeSuffix?
+	    ;
 
 fragment
 HexDigit : ('0'..'9'|'a'..'f'|'A'..'F') ;
 
 fragment
 IntegerTypeSuffix
-options{greedy=true;}
-	:	('u' | 'U')? ('l' | 'L')
-	|	('u' | 'U') ('l' | 'L')?
+options{greedy = true;}
+	:	('u'|'U')? ('l'|'L')
+	|	('u'|'U')  ('l'|'L')?
 	;
 
 FLOATING_POINT_LITERAL
@@ -2313,8 +2393,8 @@ options{greedy = true;}
     :   ('0'..'9')+ '.' ('0'..'9')* Exponent? FloatTypeSuffix?
     |   '.' ('0'..'9')+ Exponent? FloatTypeSuffix?
     |   ('0'..'9')+ Exponent FloatTypeSuffix?
-        |   ('0'..'9')+ Exponent? FloatTypeSuffix
-        	;
+    |   ('0'..'9')+ Exponent? FloatTypeSuffix
+	;
 
 fragment
 Exponent : ('e'|'E') ('+'|'-')? ('0'..'9')+ ;
@@ -2340,7 +2420,7 @@ UnicodeEscape
     :   '\\' 'u' HexDigit HexDigit HexDigit HexDigit
     ;
 
-WS  :  (' '|'\r'|'\t'|'\u000C'|'\n') {$channel=HIDDEN;}
+WS  :  (' '|'\r'|'\t'|'\u000C'|'\n') { if(this.ignore_ws == true) $channel=HIDDEN; }
     ;
 
 COMMENT
@@ -2348,10 +2428,11 @@ COMMENT
     ;
 
 LINE_COMMENT
-    : '//' ~('\n'|'\r')* '\r'? ('\n' | EOF) {$channel=HIDDEN;}
+    : '//' ~('\n'|'\r')* '\r'? '\n' {$channel=HIDDEN;}
     ;
 
+
 // ignore #line info for now
-LINE_COMMAND 
-    : '#' ~('\n'|'\r')* '\r'? '\n' {$channel=HIDDEN;}
-    ;
+//LINE_COMMAND 
+//    : '#' ~('\n'|'\r')* '\r'? '\n' {$channel=HIDDEN;}
+//    ;
