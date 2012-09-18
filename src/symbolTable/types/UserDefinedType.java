@@ -1,6 +1,7 @@
 package symbolTable.types;
 
 import errorHandling.AmbiguousBaseClass;
+import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
 import symbolTable.namespace.NamedType;
 import symbolTable.namespace.SynonymType;
@@ -91,6 +92,11 @@ public class UserDefinedType extends SimpleType{
     
     public NamedType getNamedType(){
         return this.type;
+    }
+    
+    @Override
+    public boolean isComplete(CpmClass current) throws VoidDeclaration{
+        return this.type.isComplete(current);
     }
     
 }
