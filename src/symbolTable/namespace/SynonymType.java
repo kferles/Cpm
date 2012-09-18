@@ -5,6 +5,7 @@
 package symbolTable.namespace;
 
 import errorHandling.BaseClassCVQual;
+import errorHandling.VoidDeclaration;
 import symbolTable.types.PrimitiveType;
 import symbolTable.types.Type;
 import symbolTable.types.UserDefinedType;
@@ -126,6 +127,11 @@ public class SynonymType implements NamedType {
     @Override
     public DefinesNamespace getParentNamespace(){
         return this.belongsTo;
+    }
+    
+    @Override
+    public boolean isComplete(CpmClass current) throws VoidDeclaration{
+        return this.synonym.isComplete(current);
     }
     
 }
