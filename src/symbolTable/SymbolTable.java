@@ -153,12 +153,15 @@ public class SymbolTable extends Namespace{
         rv = typeFromCache(rv);
         signature.setReturnValue(rv);
         
-        ArrayList<Type> params = signature.getParameters(), newParams = new ArrayList<Type>();
+        ArrayList<Type> params = signature.getParameters();
         
-        for(Type t : params){
-            newParams.add(typeFromCache(t));
+        if(params != null){
+            ArrayList<Type> newParams = new ArrayList<Type>();
+            for(Type t : params){
+                newParams.add(typeFromCache(t));
+            }
+            signature.setParameters(newParams);
         }
-        signature.setParameters(newParams);
         /*
          * TODO: get also m from cache
          */
