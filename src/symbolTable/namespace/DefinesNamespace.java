@@ -18,6 +18,8 @@ public interface DefinesNamespace {
     
     public DefinesNamespace getParentNamespace();
     
+    public String getName();
+    
     public NamedType isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
     
     public NamedType findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
