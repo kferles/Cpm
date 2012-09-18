@@ -2,6 +2,7 @@ package symbolTable.types;
 
 import errorHandling.AmbiguousBaseClass;
 import java.util.ArrayList;
+import symbolTable.namespace.CpmClass;
 import symbolTable.namespace.DefinesNamespace;
 
 /**
@@ -146,12 +147,10 @@ public class Method extends Type{
         return hash;
     }
     
-    
-    /*
-     * TODO: when and where to print const and virtual
-     */
     @Override
     protected StringBuilder getString(StringBuilder aggr) {
+        StringBuilder virt = null;
+        if(this.isVirtual == true) virt = new StringBuilder("virtual ");
         StringBuilder start = new StringBuilder(s.returnValue != null ? s.returnValue.toString() : "");
         int rParenIndex = start.indexOf(")");
         String end = null;
@@ -159,14 +158,10 @@ public class Method extends Type{
             end = start.substring(rParenIndex, start.length());
             start = new StringBuilder(start.substring(0, rParenIndex));
         }
-        String namespace = this.belongsTo.toString();
+        String namespace = this.belongsTo.getName();
         start.append(" ");
-        if(namespace.equals("") == false){
-            start.append(namespace);
-            start.append("::");
-        }
         start.append(aggr);
-        aggr = start.append(" (");
+        aggr = start.append("(");
         if(s.parameters != null){
             int size = s.parameters.size();
             for(int i = 0 ; i < size ; ++i){
@@ -179,7 +174,12 @@ public class Method extends Type{
         if(this.isConst == true) aggr.append(" const");
         if(this.isVolatile == true) aggr.append(" volatile");
         if(end != null) aggr.append(end);
-        return aggr;
+        if(virt == null){
+            return aggr;
+        }
+        else{
+            return virt.append(aggr);
+        }
     }
     
     @Override
@@ -195,12 +195,16 @@ public class Method extends Type{
         return this.s;
     }
     
+    public DefinesNamespace getParent(){
+        return this.belongsTo;
+    }
+    
     public boolean isVirtual(){
         return this.isVirtual;
     }
     
-    public void setVirtual(){
-        this.isVirtual = true;
+    public void setVirtual(boolean isVirtual){
+        this.isVirtual = isVirtual;
     }
     
     public void setExplicit(){
@@ -213,6 +217,11 @@ public class Method extends Type{
     
     public boolean isOverriderFor(Method m) throws AmbiguousBaseClass{
         return this.s.returnValue.subType(m.s.returnValue);
+    }
+    
+    @Override
+    public boolean isComplete(CpmClass _){
+        return true;
     }
     
 }
