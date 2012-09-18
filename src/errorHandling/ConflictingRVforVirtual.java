@@ -11,12 +11,12 @@ import symbolTable.types.Method;
  * @author kostas
  */
 public class ConflictingRVforVirtual extends ErrorMessage{
-    
+    String message;
     String final_error;
     
     public ConflictingRVforVirtual(String name, Method der, Method base){
-        super("error: conflicting return type specified for 'virtual " + der.toString(name) +"'");
-        this.final_error = "error: overriding '" + base.toString(name) +"'";
+        super("error: conflicting return type specified for 'virtual " + der.toString(ErrorMessage.getFullName(der, name)) + "'");
+        this.final_error = "error: overriding '" + base.toString(ErrorMessage.getFullName(base, name)) +"'";
     }
     
     public String getMessage(int der_line, int der_pos){
