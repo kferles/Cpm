@@ -356,4 +356,9 @@ public class Namespace implements DefinesNamespace{
         return this.visibleTypeNames;
     }
     
+    @Override
+    public String getName(){
+        return this.getStringName(new StringBuilder()).toString();
+    }
+    
 }
