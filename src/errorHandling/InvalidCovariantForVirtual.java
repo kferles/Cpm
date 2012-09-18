@@ -12,11 +12,12 @@ import symbolTable.types.Method;
  */
 public class InvalidCovariantForVirtual extends ErrorMessage {
     
+    String message;
     String final_error;
     
     public InvalidCovariantForVirtual(String name, Method derived, Method base){
-        super("error: invalid covariant return type for 'virtual " + derived.toString(name) + "'");
-        this.final_error = "error: overriding '" + base.toString(name) + "'";
+        super("error: invalid covariant return type for 'virtual " + derived.toString(ErrorMessage.getFullName(derived, name)) + "'");
+        this.final_error = "error: overriding '" + base.toString(ErrorMessage.getFullName(base, name)) + "'";
     }
     
     public String getMessage(int der_line, int der_pos){
