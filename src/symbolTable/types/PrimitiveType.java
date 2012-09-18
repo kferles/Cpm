@@ -1,5 +1,8 @@
 package symbolTable.types;
 
+import errorHandling.VoidDeclaration;
+import symbolTable.namespace.CpmClass;
+
 
 /**
  *
@@ -75,6 +78,14 @@ public class PrimitiveType extends SimpleType {
     @Override
     public boolean subType(Type o){
         return this.equals(o);
+    }
+    
+    @Override
+    public boolean isComplete(CpmClass _) throws VoidDeclaration{
+        if(this._type == PrimitiveType.void_t && this.index == 0){
+            throw new VoidDeclaration();
+        }
+        return true;
     }
     
 
