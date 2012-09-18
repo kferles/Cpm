@@ -5,6 +5,7 @@
 package symbolTable.namespace;
 
 import errorHandling.BaseClassCVQual;
+import errorHandling.VoidDeclaration;
 
 /**
  *
@@ -23,5 +24,7 @@ public interface NamedType {
     CpmClass isClassName() throws BaseClassCVQual;
     
     DefinesNamespace getParentNamespace();
+    
+    boolean isComplete(CpmClass current) throws VoidDeclaration;
     
 }
