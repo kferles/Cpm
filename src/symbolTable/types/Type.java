@@ -1,7 +1,8 @@
 package symbolTable.types;
 
 import errorHandling.AmbiguousBaseClass;
-import errorHandling.ErrorMessage;
+import errorHandling.VoidDeclaration;
+import symbolTable.namespace.CpmClass;
 
 /**
  * Abstract class representing a Type in C+- language.
@@ -25,6 +26,8 @@ public abstract class Type {
      * @return True if this <: o and false otherwise.
      */
     public abstract boolean subType(Type o) throws AmbiguousBaseClass;
+    
+    public abstract boolean isComplete(CpmClass currentClass) throws VoidDeclaration;
 
     /**
      * Returns a string of the type similar to g++ representation of types (mostly from the error messages).
