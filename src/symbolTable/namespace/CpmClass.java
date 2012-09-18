@@ -7,7 +7,6 @@ import errorHandling.CannotBeOverloaded;
 import errorHandling.ChangingMeaningOf;
 import errorHandling.ConflictingDeclaration;
 import errorHandling.ConflictingRVforVirtual;
-import errorHandling.ErrorMessage;
 import errorHandling.InvalidCovariantForVirtual;
 import errorHandling.InvalidScopeResolution;
 import errorHandling.Redefinition;
@@ -99,7 +98,10 @@ public class CpmClass implements DefinesNamespace, NamedType{
                                                               InvalidCovariantForVirtual{
         if(this.superClasses == null) return false;
         HashSet<ClassContentElement<Method>> methodsInSuper = new HashSet<ClassContentElement<Method>>();
-        collectVirtualsInBases(name, m, new HashSet<CpmClass>(), methodsInSuper);
+        HashSet<CpmClass> visited = new HashSet<CpmClass>();
+        for(CpmClass _class : this.superClasses)
+            _class.collectVirtualsInBases(name, m, visited, methodsInSuper);
+
         for(ClassContentElement<Method> method : methodsInSuper){
             try{
                 if(m.isOverriderFor(method.element) == false){
@@ -120,15 +122,19 @@ public class CpmClass implements DefinesNamespace, NamedType{
     private void collectVirtualsInBases(String name, Method m, HashSet<CpmClass> visited, HashSet<ClassContentElement<Method>> res){
         if(visited.contains(this) == true) return;
         visited.add(this);
+        boolean shadow = false;
         if(this.methods != null && this.methods.containsKey(name) == true){
             HashMap<Method.Signature, ClassContentElement<Method>> ms = this.methods.get(name);
             ClassContentElement<Method> supermElem = ms.get(m.getSignature());
             if(supermElem != null){
                 Method superm = supermElem.element;
-                if(superm.isVirtual() == true) res.add(supermElem);
+                if(superm.isVirtual() == true){
+                    shadow = true;
+                    res.add(supermElem);
+                }
             }
         }
-        if(this.superClasses != null){
+        if(shadow == false && this.superClasses != null){
             for(CpmClass t : this.superClasses){
                 t.collectVirtualsInBases(name, m, visited, res);
             }
@@ -136,7 +142,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
     }
     
     private String getFieldsFullName(String field_name){
-        String rv = this.belongsTo.toString();
+        String rv = this.getName();
         if(rv.equals("") == false) rv += "::";
         rv += field_name;
         return rv;
@@ -458,7 +464,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
                 String id = this.getFieldsFullName(name);
                 throw new CannotBeOverloaded(id, m, old_m.element, line, pos, old_m.line, old_m.pos);
             }
-            if(isOverrider(name, m) == true) m.setVirtual();
+            if(isOverrider(name, m) == true) m.setVirtual(true);
             m1.put(m.getSignature(), new ClassContentElement<Method>(m, access, isStatic, line, pos));
         }
         else{
@@ -466,7 +472,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
             checkForChangingMeaningOfType(name, m, line, pos);
             HashMap<Method.Signature, ClassContentElement<Method>> m1 = new HashMap<Method.Signature, ClassContentElement<Method>>();
             ClassContentElement<Method> method = new ClassContentElement<Method>(m, access, isStatic, line, pos);
-            if(isOverrider(name, m) == true) m.setVirtual();
+            if(isOverrider(name, m) == true) m.setVirtual(true);
             m1.put(m.getSignature(), method);
             methods.put(name, m1);
             insertInAllSymbols(name, method);
@@ -566,6 +572,12 @@ public class CpmClass implements DefinesNamespace, NamedType{
     @Override
     public CpmClass isClassName() {
         return this;
+    }
+    
+    @Override
+    public boolean isComplete(CpmClass current){
+        if(this == current) return false;
+        return this.isComplete;
     }
     
     //DefinesNamespace methods
