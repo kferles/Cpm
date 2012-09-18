@@ -1,8 +1,8 @@
 package symbolTable.types;
 
 import errorHandling.AmbiguousBaseClass;
-import errorHandling.ErrorMessage;
 import java.util.ArrayList;
+import symbolTable.namespace.CpmClass;
 
 /**
  *
@@ -163,6 +163,11 @@ public class Pointer extends Type{
             return this.pointsTo.equals(p.pointsTo);
         }
         return false;
+    }
+    
+    @Override
+    public boolean isComplete(CpmClass _){
+        return true;
     }
     
 }
