@@ -3,6 +3,7 @@ package symbolTable.types;
 import errorHandling.AmbiguousBaseClass;
 import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
+import symbolTable.namespace.NamedType;
 
 /**
  * Abstract class representing a Type in C+- language.
@@ -18,7 +19,9 @@ public abstract class Type {
     
     protected abstract StringBuilder getString(StringBuilder aggr);
     
-    public abstract String toString(String id);
+    public String toString(String id){
+        return this.getString(new StringBuilder(id)).toString();
+    }
     
     /**
      * It checks either or not this is subtype of o, i.e this <: o.
@@ -28,6 +31,12 @@ public abstract class Type {
     public abstract boolean subType(Type o) throws AmbiguousBaseClass;
     
     public abstract boolean isComplete(CpmClass currentClass) throws VoidDeclaration;
+    
+    public abstract boolean isOverloadableWith(Type o, boolean isPointer);
+    
+    public abstract boolean isOverloadableWith(NamedType o, boolean isPointer);
+    
+    public abstract int overloadHashCode(boolean isPointer);
 
     /**
      * Returns a string of the type similar to g++ representation of types (mostly from the error messages).
