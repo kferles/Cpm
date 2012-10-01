@@ -4,6 +4,8 @@ import errorHandling.AmbiguousBaseClass;
 import java.util.ArrayList;
 import symbolTable.namespace.CpmClass;
 import symbolTable.namespace.DefinesNamespace;
+import symbolTable.namespace.NamedType;
+import symbolTable.namespace.SynonymType;
 
 /**
  *
@@ -25,6 +27,10 @@ public class Method extends Type{
         Type returnValue;
 
         ArrayList<Type> parameters;
+        
+        boolean hasVarArgs,
+                isConst,
+                isVolatile;
 
         /**
             * Constructs a signature given the return value and a list with the parameters.
@@ -32,9 +38,12 @@ public class Method extends Type{
             * @param returnValue   A reference to the object that describes the of of the return value.
             * @param parameters    A list with objects that describe each parameter 's type.
             */
-        public Signature(Type returnValue, ArrayList<Type> parameters){
+        public Signature(Type returnValue, ArrayList<Type> parameters, boolean hasVaragrs, boolean isConst, boolean isVolatile){
             this.returnValue = returnValue;
             this.parameters = parameters;
+            this.hasVarArgs = hasVaragrs;
+            this.isConst = isConst;
+            this.isVolatile = isVolatile;
         }
         
         public Type getReturnValue(){
@@ -52,12 +61,25 @@ public class Method extends Type{
         public void setParameters(ArrayList<Type> params){
             this.parameters = params;
         }
+        
+        public boolean identicalParams(Signature o){
+            if((this.parameters == null && o.parameters != null)
+                    ||
+                    (this.parameters != null && o.parameters == null)) return false;
+            if(this.parameters != null && o.parameters != null){
+                int sz1 = this.parameters.size(), sz2 = o.parameters.size();
+                if(sz1 != sz2) return false;
+                for(int i = 0 ; i < sz1 ; ++i)
+                    if(this.parameters.get(i).equals(o.parameters.get(i)) == false) return false;
+            }
+            if(this.hasVarArgs != o.hasVarArgs) return false;
+            return true;
+        }
 
         @Override
         public boolean equals(Object o){
             if(o instanceof Signature){
                 Signature s1 = (Signature)o;
-               //if(this.returnValue.equals(s1.returnValue) == false) return false;
                 if((this.parameters == null && s1.parameters != null)
                     ||
                     (this.parameters != null && s1.parameters == null)) return false;
@@ -65,8 +87,11 @@ public class Method extends Type{
                     int size1 = this.parameters.size(), size2 = s1.parameters.size();
                     if(size1 != size2) return false;
                     for(int i = 0 ; i < size1 ; ++i)
-                        if(this.parameters.get(i).equals(s1.parameters.get(i)) == false) return false;
+                        if(this.parameters.get(i).isOverloadableWith(s1.parameters.get(i), false) == true) return false;
                 }
+                if(this.hasVarArgs != s1.hasVarArgs) return false;
+                if(this.isConst != s1.isConst) return false;
+                if(this.isVolatile != s1.isVolatile) return false;
                 return true;
             }
             return false;
@@ -74,17 +99,28 @@ public class Method extends Type{
 
         @Override
         public int hashCode() {
-            int hash = 5;
-            hash = 97 * hash + (this.parameters != null ? this.parameters.hashCode() : 0);
+            int hash = 7;
+            //hash = 37 * hash + (this.parameters != null ? this.parameters.hashCode() : 0);
+            if(this.parameters != null){
+                for(Type t : this.parameters)
+                    hash = 37*hash + t.overloadHashCode(false);
+            }
+            hash = 37 * hash + (this.hasVarArgs ? 1 : 0);
+            hash = 37 * hash + (this.isConst ? 1 : 0);
+            hash = 37 * hash + (this.isVolatile ? 1 : 0);
             return hash;
         }
+
+        
     }
     
     Signature s;
     
     boolean isVirtual,
             isAbstract,
-            isExplicit = false;
+            isExplicit = false,
+            hasVarArgs,
+            isDefined = false;
     
     
     /*
@@ -104,13 +140,18 @@ public class Method extends Type{
      * @param isConst       Whether method is const or not.
      */
     public Method(Type returnValue, ArrayList<Type> parameters, DefinesNamespace belongsTo, 
-                  boolean isVirtual, boolean isAbstract, boolean isConst, boolean isVolatile){
-        this.s = new Signature(returnValue, parameters);
+                  boolean isVirtual, boolean isAbstract, boolean isConst, boolean isVolatile, boolean hasVarArgs){
+        this.s = new Signature(returnValue, parameters, hasVarArgs, isConst, isVolatile);
         this.isVirtual = isVirtual;
         this.isAbstract = isAbstract;
         this.isConst = isConst;
         this.isVolatile  = isVolatile;
         this.belongsTo = belongsTo;
+        this.hasVarArgs = hasVarArgs;
+    }
+    
+    public boolean identicalParameters(Method o){
+        return this.s.identicalParams(o.s);
     }
     
     /**
@@ -158,7 +199,6 @@ public class Method extends Type{
             end = start.substring(rParenIndex, start.length());
             start = new StringBuilder(start.substring(0, rParenIndex));
         }
-        String namespace = this.belongsTo.getName();
         start.append(" ");
         start.append(aggr);
         aggr = start.append("(");
@@ -169,6 +209,10 @@ public class Method extends Type{
                 aggr.append(i == 0 ? "" : ",");
                 aggr.append(t);
             }
+        }
+        if(this.hasVarArgs == true){
+            if(s.parameters != null) aggr.append(", ...");
+            else                     aggr.append("...");
         }
         aggr.append(")");
         if(this.isConst == true) aggr.append(" const");
@@ -181,12 +225,7 @@ public class Method extends Type{
             return virt.append(aggr);
         }
     }
-    
-    @Override
-    public String toString(String id){
-        return this.getString(new StringBuilder(id)).toString();
-    }
-    
+
     public Type getReturnType(){
         return s.returnValue;
     }
@@ -215,6 +254,14 @@ public class Method extends Type{
         return this.isExplicit;
     }
     
+    public boolean isDefined(){
+        return this.isDefined;
+    }
+    
+    public void setIsDefined(){
+        this.isDefined = true;
+    }
+    
     public boolean isOverriderFor(Method m) throws AmbiguousBaseClass{
         return this.s.returnValue.subType(m.s.returnValue);
     }
@@ -222,6 +269,35 @@ public class Method extends Type{
     @Override
     public boolean isComplete(CpmClass _){
         return true;
+    }
+    
+    @Override
+    public boolean isOverloadableWith(Type o, boolean _){
+        if(o instanceof Method){
+            Method m = (Method)o;
+            return this.s.equals(m.s);
+        }
+        else if(o instanceof UserDefinedType){
+            return ((UserDefinedType)o).isOverloadableWith(this, false);
+        }
+        return true;
+    }
+    
+    @Override
+    public boolean isOverloadableWith(NamedType o, boolean isPOinter){
+        if(o instanceof SynonymType){
+            SynonymType s_t = (SynonymType)o;
+            if(s_t.getTag().equals("typedef") == true){
+                return this.isOverloadableWith(s_t.getSynonym(), isPOinter);
+            }
+            return true;
+        }
+        return true;
+    }
+    
+    @Override
+    public int overloadHashCode(boolean _) {
+        return this.s.hashCode();
     }
     
 }
