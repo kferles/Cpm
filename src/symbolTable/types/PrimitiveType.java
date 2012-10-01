@@ -2,6 +2,8 @@ package symbolTable.types;
 
 import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
+import symbolTable.namespace.NamedType;
+import symbolTable.namespace.SynonymType;
 
 
 /**
@@ -86,6 +88,47 @@ public class PrimitiveType extends SimpleType {
             throw new VoidDeclaration();
         }
         return true;
+    }
+    
+    @Override
+    public boolean isOverloadableWith(Type o, boolean isPointer){
+        if(o instanceof PrimitiveType){ 
+            PrimitiveType pt = (PrimitiveType)o;
+            if(isPointer == true){
+                if(this.isConst != pt.isConst) return true;
+                if(this.isVolatile != pt.isVolatile) return true;
+            }
+            if(this._type == pt._type && this.index == pt.index) return false;
+        }
+        else if(o instanceof UserDefinedType){
+            UserDefinedType u_t = (UserDefinedType)o;
+            return u_t.isOverloadableWith(this, isPointer);
+        }
+        return true;
+    }
+    
+    @Override
+    public boolean isOverloadableWith(NamedType o, boolean isPointer){
+        if(o instanceof CpmClass){
+            return true;
+        }
+        else{
+            SynonymType s_t = (SynonymType)o;
+            if(s_t.getTag().equals("typedef") == true){
+                return this.isOverloadableWith(s_t.getSynonym(), isPointer);
+            }
+            return true;
+        }
+    }
+    
+    @Override
+    public int overloadHashCode(boolean isPointer){
+        int hash = 13;
+        if(isPointer == true){
+            hash = hash * 151 + (this.isConst ? 1 : 0);
+            hash = hash * 151 + (this.isVolatile ? 1 : 0);
+        }
+        return hash + this.name.hashCode();
     }
     
 
