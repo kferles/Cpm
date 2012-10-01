@@ -87,11 +87,11 @@ public class SynonymType implements NamedType {
     @Override
     public String toString(){
         if(this.enum_or_typedef.equals("enum") == true){
-            String parent = this.belongsTo.toString();
+            String parent = this.belongsTo.getStringName(new StringBuilder()).toString();
             return this.enum_or_typedef + " " + parent + (parent.equals("") ? "" : "::") + this.name;
         }
         else{
-            String parent = this.belongsTo.toString();
+            String parent = this.belongsTo.getStringName(new StringBuilder()).toString();
             String t_name = " " + parent + (parent.equals("") ? "" : "::") + this.name;
             return "typedef " + this.synonym.toString(t_name);
         }
@@ -111,8 +111,8 @@ public class SynonymType implements NamedType {
     }
 
     @Override
-    public String getName() {
-        String parent = this.belongsTo.toString();
+    public String getFullName() {
+        String parent = this.belongsTo.getStringName(new StringBuilder()).toString();
         return parent + (parent.equals("") ? "" : "::") + this.name;
     }
 
