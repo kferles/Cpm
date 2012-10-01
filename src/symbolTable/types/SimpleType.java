@@ -22,6 +22,14 @@ public abstract class SimpleType extends Type {
         }
         return false;
     }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 67 * hash + super.hashCode();
+        hash = 67 * hash + (this.name != null ? this.name.hashCode() : 0);
+        return hash;
+    }
     
     @Override
     protected StringBuilder getString(StringBuilder aggr){
@@ -31,17 +39,6 @@ public abstract class SimpleType extends Type {
         n.append(aggr.toString().equals("") ? "" : " ");
         return n.append(aggr);
     }
-    
-    @Override
-    public String toString(String id){
-        return this.getString(new StringBuilder(id)).toString();
-    }
 
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 53 * hash + (this.name != null ? this.name.hashCode() : 0);
-        return hash;
-    }
 
 }
