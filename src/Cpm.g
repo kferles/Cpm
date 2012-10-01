@@ -92,6 +92,14 @@ scope collect_base_classes{
 	ArrayList<CpmClass> superClasses;
 }
 
+scope normal_mode_fail_level{
+	boolean failed;
+}
+
+scope parameters_id{
+	ArrayList<String> parameters_ids;
+}
+
 @header {
 import java.util.Set;
 import java.util.HashSet;
@@ -126,17 +134,18 @@ import preprocessor.*;
 
 	}
 
-
 	Stack paraphrases = new Stack();
 	
 	String pending_undeclared_err = null;
 	
 	AmbiguousReference pending_ambiguous = null;
 	
+	AccessSpecViolation pending_access_viol = null;
+	
 	private void resetErrorMessageAuxVars(){
-		pending_undeclared_err = null;
-		pending_ambiguous = null;
-		this.already_failed = false;
+		this.pending_undeclared_err = null;
+		this.pending_ambiguous = null;
+		this.pending_access_viol = null;
 	}
 	
 	//to change the name of the file when i'll use the cpp utility
@@ -174,6 +183,12 @@ import preprocessor.*;
 		  	System.err.print(temp.getMessage());
 		  	return temp.getLastLine();
 		}
+		if(pending_access_viol != null){
+			AccessSpecViolation temp = pending_access_viol;
+			pending_access_viol = null;
+			yield_error(temp.getMessage(), false);
+		  	return temp.getContextError();
+		}
 		return super.getErrorMessage(e, tokenNames);
 	}
 	
@@ -208,6 +223,17 @@ import preprocessor.*;
 		error = error + " '" + declarator + '\'';
 		yield_error(error, line, position);
 		//paraphrases.push(error);
+	}
+	
+	private boolean not_null_decl_id(String decl_id, String decl_spec_err, Token declarator_start){
+		if(decl_id == null){
+			if(decl_spec_err != null)
+				this.yield_error(decl_spec_err.substring(0, decl_spec_err.lastIndexOf(" ")),
+						 this.fixLine(declarator_start),
+						 declarator_start.getCharPositionInLine());
+			return false;
+		}
+		return true;
 	}
 	
 	private boolean const_count_error(){
@@ -530,32 +556,49 @@ import preprocessor.*;
 	
 	//nested name id as type specifier aux methods and fields
 	
-	private boolean already_failed = false;
+	HashMap<ArrayList<String>, NamedType> successes = new HashMap<ArrayList<String>, NamedType>();
 	
-	private NamedType cached_named_t = null;
+	HashSet<String> failures = new HashSet<String>();
 	
-	private boolean isValidNamedType(ArrayList<String> chain, boolean explicitGlobalScope, boolean need_result){
+	private NamedType getNamedType(ArrayList<String> chain){
+		NamedType rv = successes.get(chain);
+		successes.clear();
+		return rv;
+	}
+	
+	private boolean isValidNamedType(ArrayList<String> chain, boolean explicitGlobalScope){
 		NamedType t = null;
+		
+		if(chain.isEmpty() == true) return false;
+		/*
+		 * if chain is a key in the successes HashMap retrun treu
+		 */
+		if(successes.containsKey(chain) == true) return true;
+		
+		/*
+		 * if the arrayList has at least one identifier inside the failures return false
+		 */
+		for(String s : chain) if(failures.contains(s) == true) return false;
+		
 		try{
-			t = symbolTable.getNamedTypeFromNestedNameId(chain, explicitGlobalScope, false, false);
-			if(need_result == true){
-				cached_named_t = t;
-				return true;
-			}
-			else if(t == null) already_failed = true;
+			t = symbolTable.getNamedTypeFromNestedNameId(chain, explicitGlobalScope, false, false);			
 		}
 		catch(AccessSpecViolation access_viol){
 			//if chain size is 1 the error must be pending
-	  		yield_error(access_viol.getMessage(), false);
-	  		yield_error(access_viol.getContextError(), true);
-	  		already_failed = true;
+			if(chain.size() > 1){
+		  		yield_error(access_viol.getMessage(), false);
+		  		yield_error(access_viol.getContextError(), true);
+	  		}
+	  		else{
+	  			this.pending_access_viol = access_viol;
+	  		}
+
 	  	}
 	  	catch(AmbiguousReference ambiguous){
 	  		if(ambiguous.isPending() == false){
 		  		yield_error(ambiguous.getRefError(), true);
 		  		System.err.print(ambiguous.getMessage());
 		  		yield_error(ambiguous.getLastLine(), true);
-		  		already_failed = true;
 	  		}
 	  		else{
 	  			pending_ambiguous = ambiguous;
@@ -563,15 +606,20 @@ import preprocessor.*;
 	  	}
 	  	catch(NotDeclared nodeclared){
   			yield_error(nodeclared.getMessage(), true);
-  			already_failed = true;
 	  	}
 	  	catch(InvalidScopeResolution invalid){
 	  		yield_error(invalid.getMessage(), true);
-	  		already_failed = true;
 	  	}
 	  	catch(DoesNotNameType nt){
 	  		pending_undeclared_err = nt.getMessage();
-	  		already_failed = true;	//check this one
+	  	}
+	  	
+	  	if(t == null){
+	  		for(String s : chain)
+	  			this.failures.add(s);
+	  	}
+	  	else{
+	  		this.successes.put(chain, t);
 	  	}
 	  	
 	  	return t == null ? false : true;
@@ -629,7 +677,7 @@ import preprocessor.*;
 		}
 	}
 	
-	private class DeclaratorInferedType{ 
+	private class DeclaratorInferedType{
 	
 		Pointer p_rv = null;
 		
@@ -767,6 +815,19 @@ import preprocessor.*;
 	
 	//insert into current scope
 	
+	private Namespace insertNamespace(String name, Namespace _namespace){
+		Namespace rv = null;
+		try{
+			rv = this.symbolTable.insertNamespace(name, _namespace);
+		}
+		catch(DiffrentSymbol diff){
+			this.yield_error(diff.getMessage(), true);
+			this.yield_error(diff.getFinalError(), false);
+		}
+		
+		return rv;
+	}
+	
 	private CpmClass insertClass(String name, CpmClass cpm_class){
 		CpmClass rv = null;
 		try{
@@ -793,11 +854,10 @@ import preprocessor.*;
 	}
 	
 	private void insertSynonym(String declarator_id, Type data_type, int id_line, int id_pos, InClassDeclSpec class_specs){
-
 		try{
 			SynonymType syn = new SynonymType(declarator_id, data_type, this.symbolTable.getCurrentNamespace());
 			syn.setLineAndPos(id_line, id_pos);
-	
+			
 	  		if(class_specs.isStatic == true){
 				this.yield_error("error: conflicting specifiers in declaration of '" + declarator_id +"'", id_line, id_pos);
 			}
@@ -903,18 +963,16 @@ import preprocessor.*;
                 	this.yield_error(invalidCovariant.getMessage(id_line, id_pos), true);
                 	this.yield_error(invalidCovariant.getFinalError(), false);
                 }
+                catch(Redefinition redef){
+                	this.yield_error(redef.getMessage(), true);
+                	this.yield_error(redef.getFinalError(), false);
+                }
 	
 	}
 	
 	//end insert into current scope
 
 	boolean normal_mode = true;
-
-}
-
-@lexer::members{
-
-	boolean ignore_ws = true;
 
 }
 
@@ -940,15 +998,35 @@ translation_unit
  *  I'll have to optimize that in the future.
  */
 external_declaration
-options {k=1;}
+//options {k=1;}
 	: namespace_definition
 	//| (/*!!!*/nested_name_id '::' declarator[null] '{') => extern_method_definition
-	| (declaration_specifiers? declarator '{' )=> function_definition
+	| (declaration_specifiers declarator '{' )=> function_definition
 	| declaration
 	;
 	
 namespace_definition
-	: 'namespace' IDENTIFIER '{' external_declaration*  '}'
+scope normal_mode_fail_level;
+@init{
+	$normal_mode_fail_level::failed = false;
+}
+	: 'namespace' IDENTIFIER 
+	  {
+  	  	String name = $IDENTIFIER.text;
+	  	Namespace _namespace = new Namespace(name, this.symbolTable.getCurrentNamespace());
+	  	_namespace.setLineAndPos(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
+	  	_namespace.setFileName(this.preproc.getCurrentFileName());
+	  	_namespace = this.insertNamespace(name, _namespace);
+	  	if(_namespace != null){
+	  		this.symbolTable.setCurrentScope(_namespace);
+	  		this.symbolTable.setCurrentAccess(null);
+	  	}
+	  	else{
+	  		this.normal_mode = false;
+	  		$normal_mode_fail_level::failed = true;
+	  	}
+	  }
+	  '{' external_declaration*  '}' turn_on_normal_mode
 	;
 	
 extern_method_definition
@@ -957,23 +1035,39 @@ extern_method_definition
 	
 function_definition
 scope{
-
-	ArrayList<String> parameters_ids;
-
+	Method methods_type;
 }
 scope declarator_strings;
 scope decl_infered;
+scope normal_mode_fail_level;
+scope parameters_id;
 @init{
 	$declarator_strings::dir_decl_identifier = null;
 	$decl_infered::declarator = null;
-	$function_definition::parameters_ids = null;
-	this.pending_undeclared_err = null;
-	this.pending_ambiguous = null;
-}
-	: declaration_specifiers? /*set declarator error */ declarator compound_statement		// ANSI style only
-	;
+	$parameters_id::parameters_ids = null;
+	$function_definition::methods_type = null;
 	
+	$normal_mode_fail_level::failed = false;
+	
+	this.resetErrorMessageAuxVars();
+}
+	: simple_declaration
+	  {
+	  	Method m = $function_definition::methods_type;
+	  	if(m == null){
+	  		Token st = $simple_declaration.stop;
+	  		this.yield_error("error: expecting function definition",
+	  				  this.fixLine(st),
+	  				  st.getCharPositionInLine());
+	  		this.normal_mode = false;
+	  		$normal_mode_fail_level::failed = true;
+	  	}
+	  } //here and in constructor, error if identifiers are missing ...
+	  compound_statement turn_on_normal_mode	// ANSI style only
+	;
+
 declaration
+options{ k=3;}
 scope{
   boolean isTypedef;
 }
@@ -1004,7 +1098,7 @@ scope{
 	$simple_declaration::tag = null;
 }
  	:
-	  declaration_specifiers 
+	  declaration_specifiers
 	  decl_list = init_declarator_list[$declaration_specifiers.error != null ? $declaration_specifiers.error + $declaration_specifiers.init_decl_err : null,
 	  				   $declaration_specifiers.t,
 	  				   $declaration_specifiers.class_specs]?
@@ -1028,9 +1122,11 @@ scope{
 			      	  		    fixLine($declaration_specifiers.start),
 			      	  		    $declaration_specifiers.start.getCharPositionInLine());
 		      	  	}
-		      	  	yield_error("error: declaration does not declare anything", 
-		      	  		    fixLine($declaration_specifiers.start),
-		      	  		    $declaration_specifiers.start.getCharPositionInLine());
+		      	  	else{
+		      	  		yield_error("error: declaration does not declare anything", 
+		      	  			    fixLine($declaration_specifiers.start),
+		      	  		    	    $declaration_specifiers.start.getCharPositionInLine());
+		      	  	}
 	      	  	}
 	      	  }
 	      	  else if($declaration_specifiers.hasQuals){
@@ -1059,8 +1155,7 @@ nested_template_id
 template_parameter_list
 options{k = 2;}
 	: template_specifier
-	| type_specifier ','? template_parameter_list
-	| type_specifier
+	| parameter_type_list
 	;
 	
 template_type_id
@@ -1166,7 +1261,14 @@ function_specifier
 //	;
 
 init_declarator_list [String error, Type data_type, InClassDeclSpec class_specs]
-	: init_declarator [$error, $data_type, $class_specs] (',' init_declarator[$error, $data_type, $class_specs])*
+scope{
+	boolean first;
+}
+@init{
+	$init_declarator_list::first = true;
+}
+	: init_declarator [$error, $data_type, $class_specs] { $init_declarator_list::first = false; } 
+	  (',' init_declarator[$error, $data_type, $class_specs])*
 	;
 
 init_declarator [String error, Type data_type, InClassDeclSpec class_specs]
@@ -1178,75 +1280,86 @@ scope decl_id_info;
 	$declarator_strings::dir_decl_error = $error;
 	$decl_infered::declarator = null;
 }
-	: declarator ('=' initializer)?
+	: declarator { not_null_decl_id($declarator_strings::dir_decl_identifier, $declarator_strings::dir_decl_error, $declarator.start) }? 
+	  ('=' initializer)?
 	  {	//todo: error for typedef with initializer
-	  	if($data_type != null){
-		  	DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
-		  	String declarator_id = $declarator_strings::dir_decl_identifier;
-		  	int id_line = $decl_id_info::line;
-		  	int id_pos = $decl_id_info::pos;
-		  	if(decl_inf_t == null) {
-		  		System.out.println($data_type.toString(declarator_id));
-		  		if($declaration.size() > 0 && $declaration::isTypedef == true){
-		  			this.insertSynonym(declarator_id, $data_type, id_line, id_pos, $class_specs);
-		  		}
-		  		else{
-	  				if(this.symbolTable.isCurrentNamespaceClass() == true){
-	  					this.insertField(declarator_id, $data_type, id_line, id_pos, $class_specs);
-	  				}
-		  		}
+	  	if($declarator_strings::dir_decl_identifier != null){
+		  	if($data_type != null){
+			  	DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
+			  	String declarator_id = $declarator_strings::dir_decl_identifier;
+			  	int id_line = $decl_id_info::line;
+			  	int id_pos = $decl_id_info::pos;
+			  	if(decl_inf_t == null) {
+			  		if($function_definition.size() == 0) System.out.println($data_type.toString(declarator_id));
+			  		if($declaration.size() > 0 && $declaration::isTypedef == true){
+			  			this.insertSynonym(declarator_id, $data_type, id_line, id_pos, $class_specs);
+			  		}
+			  		else{
+		  				if($function_definition.size() == 0){
+		  					this.insertField(declarator_id, $data_type, id_line, id_pos, $class_specs);
+		  				}
+			  		}
+			  	}
+			  	else{
+			  		boolean err_inDeclarator = false;
+			  		if(decl_inf_t.p_pend != null){
+			  			decl_inf_t.p_pend.setPointsTo($data_type);
+			  		}
+			  		else if(decl_inf_t.m_pend != null){
+			  			decl_inf_t.m_pend.getSignature().setReturnValue($data_type);
+			  		}
+			  		else if(decl_inf_t.ar_pend != null){
+			  			decl_inf_t.ar_pend.setType($data_type);
+			  		}
+			  		else err_inDeclarator = true;
+			  		
+			  		if(err_inDeclarator == false){
+				  		if(decl_inf_t.p_rv != null){
+				  			//System.out.println(declarator_id);
+				  			System.out.println(decl_inf_t.p_rv.toString(declarator_id));
+				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
+					  			this.insertSynonym(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
+					  		}
+					  		else{
+				  				if($function_definition.size() == 0){
+				  					this.insertField(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
+				  				}
+					  		}
+				  		}
+				  		else if(decl_inf_t.m_rv != null){
+				  			System.out.println(decl_inf_t.m_rv.toString(declarator_id));
+				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
+					  			this.insertSynonym(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+					  		}
+					  		else{
+				  				//if(this.symbolTable.isCurrentNamespaceClass() == true){
+				  				if($function_definition.size() > 0){
+				  					decl_inf_t.m_rv.setIsDefined();
+				  					$function_definition::methods_type = decl_inf_t.m_rv;
+				  				}
+				  				this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+					  		}
+				  			
+				  		}
+				  		else if(decl_inf_t.ar_rv != null){
+				  			CpmArray ar = decl_inf_t.ar_rv;
+				  			System.out.println(ar.toString(declarator_id));
+				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
+					  			this.insertSynonym(declarator_id, ar, id_line, id_pos, $class_specs);
+					  		}
+					  		else{
+				  				if($function_definition.size() == 0){
+				  					this.insertField(declarator_id, ar, id_line, id_pos, $class_specs);
+				  				}
+					  		}
+				  		}
+			  		}
+			  	}
 		  	}
-		  	else{
-		  		boolean err_inDeclarator = false;
-		  		if(decl_inf_t.p_pend != null){
-		  			decl_inf_t.p_pend.setPointsTo($data_type);
-		  		}
-		  		else if(decl_inf_t.m_pend != null){
-		  			decl_inf_t.m_pend.getSignature().setReturnValue($data_type);
-		  		}
-		  		else if(decl_inf_t.ar_pend != null){
-		  			decl_inf_t.ar_pend.setType($data_type);
-		  		}
-		  		else err_inDeclarator = true;
-		  		
-		  		if(err_inDeclarator == false){
-			  		if(decl_inf_t.p_rv != null){
-			  			//System.out.println(declarator_id);
-			  			System.out.println(decl_inf_t.p_rv.toString(declarator_id));
-			  			if($declaration.size() > 0 && $declaration::isTypedef == true){
-				  			this.insertSynonym(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
-				  		}
-				  		else{
-			  				if(this.symbolTable.isCurrentNamespaceClass() == true){
-			  					this.insertField(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
-			  				}
-				  		}
-			  		}
-			  		else if(decl_inf_t.m_rv != null){
-			  			System.out.println(decl_inf_t.m_rv.toString(declarator_id));
-			  			if($declaration.size() > 0 && $declaration::isTypedef == true){
-				  			this.insertSynonym(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
-				  		}
-				  		else{
-			  				if(this.symbolTable.isCurrentNamespaceClass() == true){
-			  					this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
-			  				}
-				  		}
-			  			
-			  		}
-			  		else if(decl_inf_t.ar_rv != null){
-			  			CpmArray ar = decl_inf_t.ar_rv;
-			  			System.out.println(ar.toString(declarator_id));
-			  			if($declaration.size() > 0 && $declaration::isTypedef == true){
-				  			this.insertSynonym(declarator_id, ar, id_line, id_pos, $class_specs);
-				  		}
-				  		else{
-			  				if(this.symbolTable.isCurrentNamespaceClass() == true){
-			  					this.insertField(declarator_id, ar, id_line, id_pos, $class_specs);
-			  				}
-				  		}
-			  		}
-		  		}
+		  	else if($declarator_strings::dir_decl_error == null){
+		  		this.yield_error("error: C+- forbids declaration of '" + $declarator_strings::dir_decl_identifier + "' with no type",
+		  				 this.fixLine($declarator.start),
+		  				 $declarator.start.getCharPositionInLine());
 		  	}
 	  	}
 	  }
@@ -1330,22 +1443,20 @@ type_specifier
 	  }
 	  {unsigned_count_error() == true}?
 	| struct_union_or_class_specifier
-	| nested_name_id  
+	| nested_name_id 
 	  { $Type_Spec::type[1] = true;
 	    $Type_Spec::userDefinedCount++;
 	    /*
 	     * IMPROVE this so this method will not be called again (needs a more complex cache)
 	     */
-	    isValidNamedType($nested_name_id.names_chain, $nested_name_id.explicitGlobalScope, true);
-	    $Type_Spec::named_t = cached_named_t;
+	    $Type_Spec::named_t = this.getNamedType($nested_name_id.names_chain);
+	    //$Type_Spec::named_t = cached_named_t;
 	  }
 	  /*
 	   * Here also check if the nested_name_id is any other kind of symbol ...
 	   */
 	  { this.normal_mode == false ||
-	    ((already_failed == false) 
-	     && (cached_named_t != null || isValidNamedType($nested_name_id.names_chain, $nested_name_id.explicitGlobalScope, false) == true))}?
-	  { cached_named_t = null; }
+	    (isValidNamedType($nested_name_id.names_chain, $nested_name_id.explicitGlobalScope) == true)}?
 	/*| enum_specifier
 	| nested_template_id*/
 	;
@@ -1403,7 +1514,7 @@ struct_union_or_class_specifier
 	  		}
 	  		else if(named_t instanceof SynonymType){
 	  			Token tag = $struct_union_or_class.start;
-	  			this.yield_error("error: using typedef or enum name '" + named_t.getName() + "' after '" + tag.getText() + "'",
+	  			this.yield_error("error: using typedef or enum name '" + named_t.getFullName() + "' after '" + tag.getText() + "'",
 	  					  this.fixLine(tag),
 	  					  tag.getCharPositionInLine());
 	  			$Type_Spec::named_t = null;
@@ -1475,8 +1586,10 @@ scope{
 	UserDefinedType t;
 }
 scope collect_base_classes;
+scope normal_mode_fail_level;
 @init{
 	$struct_union_or_class_definition::t = null;
+	$normal_mode_fail_level::failed = false;
 }
 	: struct_union_or_class IDENTIFIER (':' { $collect_base_classes::superClasses = new ArrayList<CpmClass>(); } base_classes = base_class_list)?
 	  {
@@ -1504,6 +1617,7 @@ scope collect_base_classes;
 	  	}
 	  	else{
 	  		this.normal_mode = false;
+	  		$normal_mode_fail_level::failed = true;
 	  	}
 	  }
 	   // todo : init_declarator_list parameters
@@ -1519,8 +1633,10 @@ scope{
 	UserDefinedType t;
 }
 scope collect_base_classes;
+scope normal_mode_fail_level;
 @init{
 	$extern_class_definition::t = null;
+	$normal_mode_fail_level::failed = false;
 }
 	: struct_union_or_class nested_name_id (':' { $collect_base_classes::superClasses = new ArrayList<CpmClass>(); } base_classes = base_class_list)?
 	  {
@@ -1599,6 +1715,7 @@ scope collect_base_classes;
 		
 		if(_class == null){
 			this.normal_mode = false;
+			$normal_mode_fail_level::failed = true;
 		}
 	  }
 	 '{' class_declaration_list '}' 
@@ -1610,7 +1727,7 @@ scope collect_base_classes;
 	
 turn_on_normal_mode
 @init{
-	this.normal_mode = true;
+	if($normal_mode_fail_level::failed == true) this.normal_mode = true;
 }
 	:
 	;
@@ -1704,40 +1821,93 @@ class_declaration_list
 	
 class_content_element
 	: access_specifier ':'
-	| (declaration_specifiers declarator '{') => function_definition 
+	| (declaration_specifiers? declarator '{') => function_definition 
 	| in_class_declaration
 	;
 	
-constructor_definition
-	: className '(' parameter_type_list? ')' compound_statement
+constructor
+	: construcctor_head ';'
+	| construcctor_head 
+	  {$construcctor_head.m.setIsDefined();} 
+	  compound_statement
 	;
 	
-constructor_declaration
-	: className '(' parameter_type_list? ')' ';'
+construcctor_head returns [Method m]
+scope parameters_id;
+@init{
+	$m = null;
+	$parameters_id::parameters_ids = null;
+}
+	: className '(' parameter_type_list? ')'
+	  {
+	     try{
+	        ArrayList<Type> param = null;
+	        boolean hasVarArgs = false;
+	        Token des_id = $className.start;
+	        if($parameter_type_list.tree != null){
+	     	    param = $parameter_type_list.params.params;
+	     	    hasVarArgs = $parameter_type_list.params.hasVarargs;
+	        } 
+	     
+	     	Method m1 = new Method(null, param, this.symbolTable.getCurrentNamespace(), false, false, false, false, hasVarArgs);
+	     	$m = m1;
+	     	this.symbolTable.insertConstructor($m, this.fixLine(des_id), des_id.getCharPositionInLine());
+	     }
+	     catch(CannotBeOverloaded cBeoverld){
+                	this.yield_error(cBeoverld.getMessage(), true);
+                	this.yield_error(cBeoverld.getFinalError(), false);
+             }
+	  }
 	;
 	
-destructor_definition
-	: '~'className '(' ')' compound_statement
+destructor
+	: destructor_head ';' 
+	| destructor_head
+	  {$destructor_head.m.setIsDefined();}
+	  compound_statement
 	;
 	
-destructor_declaration
-	: '~'className '(' ')' ';'
+destructor_head returns [Method m]
+@init{
+	$m = null;
+}
+	: '~'className '(' parameter_type_list? ')'
+	{
+	     try{
+		     Token des_id = $className.start;
+		     if($parameter_type_list.tree != null){
+		     	this.yield_error("error: destructors may not have parameters", this.fixLine(des_id), des_id.getCharPositionInLine());
+		     }
+		     else{
+		        /*
+		         * cast cannot fail because of the semantic predicate in the className rule
+		         */
+		     	CpmClass _class = (CpmClass) this.symbolTable.getCurrentNamespace();
+		     	Method m1 = new Method(null, null, _class, false, false, false, false, false);
+			$m = m1;
+	     	     	_class.insertDestructor($m, this.symbolTable.getCurrentAccess(), this.fixLine(des_id), des_id.getCharPositionInLine());
+	
+	     	     }
+	     }
+	     catch(CannotBeOverloaded cBeoverld){
+               	this.yield_error(cBeoverld.getMessage(), true);
+               	this.yield_error(cBeoverld.getFinalError(), false);
+             }
+	 }
 	;
 
 className
-	: IDENTIFIER
+	: {normal_mode == false}? IDENTIFIER
+	| {(symbolTable.isCurrentNamespaceClass() && input.LT(1).getText().equals(symbolTable.getCurrentNamespace().getName()))}? IDENTIFIER
 	;
-	
+
 in_class_declaration
-	: /*(struct_union_or_class IDENTIFIER ':' 'public') => struct_union_or_class_definition ';'
-	| (struct_union_or_class IDENTIFIER '{') => struct_union_or_class_definition ';'
-	| simple_declaration ';'
-	| template_declaration
-	| 'typedef' simple_declaration ';'*/
-	  (declaration_specifiers? declarator '{' )=> function_definition
-	|  declaration
-	| (constructor_definition | constructor_declaration)
-	| (destructor_definition | destructor_declaration)
+@after {
+  this.resetErrorMessageAuxVars();
+}
+	: constructor
+	| destructor
+	| declaration
 	;
 	
 inclass_function_definition
@@ -1841,6 +2011,16 @@ direct_declarator
 		)
         	declarator_suffix*
 	;
+	/*catch [RecognitionException ex]{
+		if($init_declarator_list.size() > 0 && $init_declarator_list::first ){
+			if($declarator_strings::dir_decl_error == null) throw ex;
+			//System.out.println($declarator_strings::dir_decl_error);
+			if($declarator_strings::dir_decl_error.equals("error: two or more data types in declaration of") == false) throw ex;
+			$init_declarator_list::first = false;
+			this.paraphrases.push("error: two or more data types in declaration");
+		}
+		throw ex;
+	}*/
 
 declarator_suffix
 scope cv_qual;
@@ -1879,12 +2059,12 @@ scope cv_qual;
     	  			 * virtual = false here because this flag is available in an other level
     	  			 */
     	  			m = new Method(null, ps.params, this.symbolTable.getCurrentNamespace(),
-    	  				       false, isAbstract, isConst, isVolatile);
+    	  				       false, isAbstract, isConst, isVolatile, ps.hasVarargs);
     	  		}
     	  	}
     	  	else{
     	  		m = new Method(null, null, this.symbolTable.getCurrentNamespace(),
-    	  			       false, isAbstract, isConst, isVolatile);
+    	  			       false, isAbstract, isConst, isVolatile, false);
     	  	}
     	  	
     	  	if(m != null){
@@ -1892,8 +2072,8 @@ scope cv_qual;
 			
 			if(d_inf_t == null){
 				$decl_infered::declarator = new DeclaratorInferedType(m);
-				if($parameter_type_list.tree != null && $function_definition.size() > 0){
-					$function_definition::parameters_ids = ps.ids;
+				if($parameter_type_list.tree != null && $parameters_id.size() > 0){
+					$parameters_id::parameters_ids = ps.ids;
 				}
 			}
 			else{
@@ -1943,7 +2123,7 @@ scope{
 	   $parameter_type_list::p_list = new ParameterList();
 	   $parameter_type_list::error_in_parameters = false;
 	  } 
-	  parameter_list (',' varargs = '...')? 
+	  parameter_list (','? varargs = '...')? 
 	  {
 	    if($parameter_type_list::error_in_parameters == true) $params = null;
 	    else{
@@ -1951,6 +2131,13 @@ scope{
 	      $params = $parameter_type_list::p_list;
 	    }
 	  }
+	  | {
+	   	$parameter_type_list::p_list = new ParameterList();
+	   	$parameter_type_list::error_in_parameters = false;
+	    } 
+	    '...' { $parameter_type_list::p_list.hasVarargs = true; 
+	    	    $params = $parameter_type_list::p_list;
+	    	  }
 	;
 
 parameter_list
@@ -2029,7 +2216,7 @@ scope decl_infered;
 			  			$parameter_declaration::p.t = decl_inf_t.p_rv;
 			  		}
 			  		else if(decl_inf_t.m_rv != null){
-			  			$parameter_declaration::p.t = decl_inf_t.m_rv;
+			  			$parameter_declaration::p.t = new Pointer(decl_inf_t.m_rv, false, false);
 			  		}
 			  		else if(decl_inf_t.ar_rv != null){
 			  			$parameter_declaration::p.t = decl_inf_t.ar_rv;
@@ -2175,7 +2362,7 @@ constant
     
 primary_expression
 	: constant
-	| IDENTIFIER // --> nested_name_id
+	| nested_name_id
 	| 'this'
 	| '(' expression ')'
 	;
@@ -2291,9 +2478,9 @@ iteration_statement
 	: 'while' '(' expression ')' statement
 	| 'do' statement 'while' '(' expression ')' ';'
 	| 'for' '(' init_for_iteration_stmt expression_statement expression? ')' statement
-	;
-	
-init_for_iteration_stmt
+		;
+			
+			init_for_iteration_stmt
 	: //simple_declaration
 	  expression_statement
 	;
@@ -2386,6 +2573,8 @@ STRING_LITERAL
     :  '"' ( EscapeSequence | ~('\\'|'"') )* '"'
     ;
 
+
+
 fragment
 ZERO 	: '0';
 DECIMAL_LITERAL
@@ -2440,7 +2629,7 @@ UnicodeEscape
     :   '\\' 'u' HexDigit HexDigit HexDigit HexDigit
     ;
 
-WS  :  (' '|'\r'|'\t'|'\u000C'|'\n') { if(this.ignore_ws == true) $channel=HIDDEN; }
+WS  :  (' '|'\r'|'\t'|'\u000C'|'\n') { $channel=HIDDEN; }
     ;
 
 COMMENT
