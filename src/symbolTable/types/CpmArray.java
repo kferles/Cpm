@@ -7,6 +7,8 @@ package symbolTable.types;
 import errorHandling.AmbiguousBaseClass;
 import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
+import symbolTable.namespace.NamedType;
+import symbolTable.namespace.SynonymType;
 
 /**
  *
@@ -63,20 +65,59 @@ public class CpmArray extends Type {
         }
         return array_of.getString(aggr);
     }
-    
-    @Override
-    public String toString(String id){
-        return this.getString(new StringBuilder(id)).toString();
-    }
 
     @Override
     public boolean subType(Type o) throws AmbiguousBaseClass {
-        throw new UnsupportedOperationException("Not supported yet.");
+        return this.equals(o);
     }
     
     @Override
     public boolean isComplete(CpmClass current) throws VoidDeclaration{
         return this.array_of.isComplete(current);
+    }
+    
+    public Pointer convertToPointer(){
+        Pointer rv = new Pointer(null, false, false);
+        Pointer pend = rv;
+        for(int i = 1 ; i < dimensions_num ; ++i){
+            Pointer p = new Pointer(null, false, false);
+            pend.pointsTo = p;
+            pend = p;
+        }
+        pend.pointsTo = this.array_of;
+        return rv;
+    }
+
+    @Override
+    public boolean isOverloadableWith(Type o, boolean _) {
+        if(o instanceof CpmArray){
+            CpmArray ar = (CpmArray) o;
+            if(this.dimensions_num != ar.dimensions_num) return true;
+            return !this.array_of.equals(ar.array_of);
+        }
+        else if(o instanceof Pointer){
+            return this.convertToPointer().isOverloadableWith(o, true);
+        }
+        else if(o instanceof UserDefinedType){
+            return ((UserDefinedType)o).isOverloadableWith(this, false);
+        }
+        return true;
+    }
+
+    @Override
+    public boolean isOverloadableWith(NamedType o, boolean isPointer) {
+        if(o instanceof SynonymType){
+            SynonymType s_t = (SynonymType)o;
+            if(s_t.getTag().equals("typedef") == true){
+                return this.isOverloadableWith(s_t.getSynonym(), isPointer);
+            }
+        }
+        return true;
+    }
+    
+    @Override
+    public int overloadHashCode(boolean _) {
+        return this.convertToPointer().overloadHashCode(true);
     }
     
 }
