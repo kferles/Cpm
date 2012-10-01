@@ -8,7 +8,6 @@ import errorHandling.ConflictingDeclaration;
 import errorHandling.ConflictingRVforVirtual;
 import errorHandling.DiffrentSymbol;
 import errorHandling.DoesNotNameType;
-import errorHandling.ErrorMessage;
 import errorHandling.InvalidCovariantForVirtual;
 import errorHandling.InvalidScopeResolution;
 import errorHandling.NotDeclared;
@@ -92,6 +91,8 @@ public class SymbolTable extends Namespace{
     public SymbolTable(){
         super("", null);
         super.visibleTypeNames = new HashMap<String, NamedType>();
+        super.innerNamespaces = new HashMap<String, NamespaceElement<Namespace>>();
+        super.innerNamespaces.put("std", new NamespaceElement<Namespace>(new Namespace("std", this), null, -1, -1));
     }
     
     public void setCurrentAccess(CpmClass.AccessSpecifier access){
@@ -146,7 +147,8 @@ public class SymbolTable extends Namespace{
                                                                                                                  CannotBeOverloaded,
                                                                                                                  DiffrentSymbol,
                                                                                                                  ConflictingRVforVirtual,
-                                                                                                                 InvalidCovariantForVirtual {
+                                                                                                                 InvalidCovariantForVirtual,
+                                                                                                                 Redefinition{
 
         Method.Signature signature = m.getSignature();
         Type rv = signature.getReturnValue();
@@ -162,9 +164,7 @@ public class SymbolTable extends Namespace{
             }
             signature.setParameters(newParams);
         }
-        /*
-         * TODO: get also m from cache
-         */
+        
         if(this.type == ScopeType.Class){
             current_class.insertMethod(name, m, this.current_access, isStatic, line, pos);
         }
@@ -173,6 +173,21 @@ public class SymbolTable extends Namespace{
         }
     }
     
+    public void insertConstructor(Method m, int line, int pos) throws CannotBeOverloaded{
+        Method.Signature signature = m.getSignature();
+        ArrayList<Type> params = signature.getParameters();
+        
+        if(params != null){
+            ArrayList<Type> newParams = new ArrayList<Type>();
+            for(Type t : params){
+                newParams.add(typeFromCache(t));
+            }
+            signature.setParameters(newParams);
+        }
+        
+        this.current_class.insertConstructor(m, this.current_access, line, pos);
+    }
+
     public CpmClass insertInnerType(String name, CpmClass cpm_class, boolean isStatic) throws SameNameAsParentClass,
                                                                                           ConflictingDeclaration,
                                                                                           Redefinition,
@@ -202,12 +217,8 @@ public class SymbolTable extends Namespace{
         }
     }
     
-    public Namespace insertNamespace(String name, Namespace inner_namespace) throws DiffrentSymbol,
-                                                                                    ConflictingDeclaration,
-                                                                                    ChangingMeaningOf,
-                                                                                    CannotBeOverloaded,
-                                                                                    Redefinition {
-        
+    public Namespace insertNamespace(String name, Namespace inner_namespace) throws DiffrentSymbol {
+        //Todo: think if there is any case that a namespace will be inserted inside a Class ????
         //if(this.type == ScopeType.Class) throw new ErrorMessage("Error: this should not be happening");
         return current_namespace.insertInnerNamespace(name, inner_namespace);
     }
