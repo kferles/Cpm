@@ -3,6 +3,8 @@ package symbolTable.types;
 import errorHandling.AmbiguousBaseClass;
 import java.util.ArrayList;
 import symbolTable.namespace.CpmClass;
+import symbolTable.namespace.NamedType;
+import symbolTable.namespace.SynonymType;
 
 /**
  *
@@ -63,6 +65,10 @@ public class Pointer extends Type{
                     aggr.append(parameters.get(i));
                 }
             }
+            if(m.hasVarArgs == true){
+                if(parameters != null) aggr.append(", ...");
+                else                   aggr.append("...");
+            }
             aggr.append(")");
             if(m.isConst == true) aggr.append(" const");
             if(m.isVolatile == true) aggr.append(" volatile");
@@ -121,12 +127,7 @@ public class Pointer extends Type{
             return pTo.append(id != null ? id : "");
         }
     }
-    
-    @Override
-    public String toString(String id){
-        return this.getString(new StringBuilder(id)).toString();
-    }
-    
+
     @Override
     public boolean equals(Object o){
         if(o == null) return false;
@@ -141,6 +142,7 @@ public class Pointer extends Type{
     @Override
     public int hashCode() {
         int hash = 7;
+        hash = 83 * hash + super.hashCode();
         hash = 83 * hash + (this.pointsTo != null ? this.pointsTo.hashCode() : 0);
         return hash;
     }
@@ -168,6 +170,39 @@ public class Pointer extends Type{
     @Override
     public boolean isComplete(CpmClass _){
         return true;
+    }
+    
+    @Override
+    public boolean isOverloadableWith(Type o, boolean _){
+        if(o instanceof Pointer){
+            Pointer p = (Pointer) o;
+            return this.pointsTo.isOverloadableWith(p.pointsTo, true);
+        }
+        else if(o instanceof CpmArray){
+            CpmArray ar = (CpmArray)o;
+            Pointer n_p = ar.convertToPointer();
+            return this.isOverloadableWith(n_p, true);
+        }
+        else if(o instanceof UserDefinedType){
+            return ((UserDefinedType)o).isOverloadableWith(this, false);
+        }
+        return true;
+    }
+    
+    @Override
+    public boolean isOverloadableWith(NamedType nt, boolean _){
+        if(nt instanceof SynonymType){
+            SynonymType s_t = (SynonymType)nt;
+            if(s_t.getTag().equals("typedef") == true){
+                return this.isOverloadableWith(s_t.getSynonym(), false);
+            }
+        }
+        return true;
+    }
+    
+    @Override
+    public int overloadHashCode(boolean isPointer) {
+        return this.pointsTo.overloadHashCode(true);
     }
     
 }
