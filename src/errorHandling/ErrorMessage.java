@@ -9,7 +9,7 @@ import symbolTable.types.Method;
 public class ErrorMessage extends Exception{
     
     public static String getFullName(Method m, String name){
-        String id = m.getParent().getName();
+        String id = m.getParent().getFullName();
         if(id.equals("") == false) id += "::";
         id += name;
         return id;
