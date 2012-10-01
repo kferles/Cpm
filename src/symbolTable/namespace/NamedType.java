@@ -13,7 +13,7 @@ import errorHandling.VoidDeclaration;
  */
 public interface NamedType {
     
-    String getName();
+    String getFullName();
     
     String getTag();
     
