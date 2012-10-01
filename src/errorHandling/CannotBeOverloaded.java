@@ -4,8 +4,6 @@
  */
 package errorHandling;
 
-import symbolTable.types.Method;
-
 /**
  *
  * @author kostas
