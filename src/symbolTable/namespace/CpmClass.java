@@ -22,39 +22,47 @@ import symbolTable.types.Type;
  * are a bit useless for now (but keep them for any case)
  */
 
+/*
+ * TODO: print static for fields in error messages throug print field method ... May also need to change the exceptions
+ */
+
+
 /**
  *
  * @author kostas
  */
 public class CpmClass implements DefinesNamespace, NamedType{
     
-    String name;
+    protected String name;
     
-    HashMap<String, ClassContentElement<? extends Type>> allSymbols = new HashMap<String, ClassContentElement<? extends Type>>();
+    protected HashMap<String, ClassContentElement<? extends Type>> allSymbols = new HashMap<String, ClassContentElement<? extends Type>>();
     
-    HashSet<CpmClass> superClasses = null;
+    protected HashSet<CpmClass> superClasses = null;
     
-    HashMap<String, ClassContentElement<Type>> fields = null;
+    protected HashMap<String, ClassContentElement<Type>> fields = null;
     
-    HashMap<String, ClassContentElement<CpmClass>> innerTypes = null;
+    protected HashMap<String, ClassContentElement<CpmClass>> innerTypes = null;
     
-    HashMap<String, ClassContentElement<SynonymType>> innerSynonyms = null;
+    protected HashMap<String, ClassContentElement<SynonymType>> innerSynonyms = null;
     
     /*
      * Methods are represented as a multi map to support method overloading.
      * That is, every name is maped to another map from a signature to a class Method
      * object. 
      */
-    HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>> methods = null;
+    protected HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>> methods = null;
     
-    HashMap<String, NamedType> visibleTypeNames = null;
+    protected HashMap<Method.Signature, ClassContentElement<Method>> constructors = null;
     
-    DefinesNamespace belongsTo;
+    protected ClassContentElement<Method> destructor = null;
     
-    String struct_union_or_class;
+    protected HashMap<String, NamedType> visibleTypeNames = null;
     
-    AccessSpecifier access;
+    protected DefinesNamespace belongsTo;
     
+    protected String struct_union_or_class;
+    
+    protected AccessSpecifier access;
     
     /*
      * Line and position within the file.
@@ -62,13 +70,13 @@ public class CpmClass implements DefinesNamespace, NamedType{
      * that the line is not available through antlr.
      */
     
-    int line, pos;
+    protected int line, pos;
     
-    String fileName;
+    protected String fileName;
     
-    boolean isComplete;
+    protected boolean isComplete;
 
-            private class ClassContentElement <T>{
+            protected class ClassContentElement <T>{
                 T element;
 
                 AccessSpecifier access;
@@ -147,10 +155,14 @@ public class CpmClass implements DefinesNamespace, NamedType{
     }
     
     private String getFieldsFullName(String field_name){
-        String rv = this.getName();
+        String rv = this.getFullName();
         if(rv.equals("") == false) rv += "::";
         rv += field_name;
         return rv;
+    }
+    
+    private String printField(String name, ClassContentElement<? extends Type> field){
+        return (field.isStatic ? "static " : "") + field.element.toString(getFieldsFullName(name));
     }
     
     private void checkForConflictsInDecl(String name, Type t, int line, int pos) throws ConflictingDeclaration{
@@ -464,10 +476,20 @@ public class CpmClass implements DefinesNamespace, NamedType{
         if(this.methods == null) this.methods = new HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>>();
         if(this.methods.containsKey(name)){
             HashMap<Method.Signature, ClassContentElement<Method>> m1 = methods.get(name);
+            String id = this.getFieldsFullName(name);
+            for(ClassContentElement<Method> elem : m1.values()){
+                if(elem.element.identicalParameters(m)){
+                    if(elem.isStatic == true){
+                        throw new CannotBeOverloaded(m.toString(id), this.printField(name, elem), line, pos, elem.fileName, elem.line, elem.pos);
+                    }
+                    if(isStatic == true){
+                        throw new CannotBeOverloaded("static " + m.toString(id), this.printField(name, elem), line, pos, elem.fileName, elem.line, elem.pos);
+                    }
+                }
+            }
             if(m1.containsKey(m.getSignature())){
                 ClassContentElement<Method> old_m = m1.get(m.getSignature());
-                String id = this.getFieldsFullName(name);
-                throw new CannotBeOverloaded(id, m, old_m.element, line, pos, old_m.fileName, old_m.line, old_m.pos);
+                throw new CannotBeOverloaded(m.toString(id), this.printField(name, old_m), line, pos, old_m.fileName, old_m.line, old_m.pos);
             }
             if(isOverrider(name, m) == true) m.setVirtual(true);
             m1.put(m.getSignature(), new ClassContentElement<Method>(m, access, isStatic, this.fileName, line, pos));
@@ -482,6 +504,27 @@ public class CpmClass implements DefinesNamespace, NamedType{
             methods.put(name, m1);
             insertInAllSymbols(name, method);
         }
+    }
+    
+    public void insertConstructor(Method m, AccessSpecifier access, int line, int pos) throws CannotBeOverloaded{
+        if(this.constructors == null) this.constructors = new HashMap<Method.Signature, ClassContentElement<Method>>();
+        //ClassContentElement<Method> toInsert = new ClassContentElement<Method>(m, access, false, fileName, line, pos);
+        Method.Signature s = m.getSignature();
+        if(this.constructors.containsKey(s) == true){
+            ClassContentElement<Method> old = this.constructors.get(s);
+            throw new CannotBeOverloaded(m.toString(name), old.element.toString(name), line, pos, old.fileName, old.line, old.pos);
+        }
+        
+        this.constructors.put(m.getSignature(), new ClassContentElement<Method>(m, access, false, fileName, line, pos));
+    }
+    
+    public void insertDestructor(Method m, AccessSpecifier access, int line, int pos) throws CannotBeOverloaded{
+        if(this.destructor != null){
+            String des_name = "~" + m.toString(this.name);
+            throw new CannotBeOverloaded(des_name, des_name, line, pos, this.destructor.fileName, this.destructor.line, this.destructor.pos);
+        }
+        
+        this.destructor = new ClassContentElement<Method>(m, access, false, fileName, line, pos);
     }
     
     @Override
@@ -564,7 +607,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
     //NamedType methods
     
     @Override
-    public String getName(){
+    public String getFullName(){
         return this.getStringName(new StringBuilder()).toString();
     }
     
@@ -685,6 +728,11 @@ public class CpmClass implements DefinesNamespace, NamedType{
             }
         }
         return rv;
+    }
+    
+    @Override
+    public String getName(){
+        return this.name;
     }
 
     
