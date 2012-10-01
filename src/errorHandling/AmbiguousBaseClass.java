@@ -13,7 +13,7 @@ import symbolTable.namespace.CpmClass;
 public class AmbiguousBaseClass extends ErrorMessage{
     
     public AmbiguousBaseClass(CpmClass base, CpmClass derived){
-        super("error: '" + base.getName() + "'is an ambiguous base of '" + derived.getName() + "'");
+        super("error: '" + base.getFullName() + "'is an ambiguous base of '" + derived.getFullName() + "'");
     }
     
 }
