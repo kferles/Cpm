@@ -6,6 +6,7 @@ import errorHandling.CannotBeOverloaded;
 import errorHandling.ChangingMeaningOf;
 import errorHandling.ConflictingDeclaration;
 import errorHandling.DiffrentSymbol;
+import errorHandling.InvalidScopeResolution;
 import errorHandling.Redefinition;
 import java.util.HashMap;
 import symbolTable.types.Method;
@@ -25,27 +26,27 @@ public class Namespace implements DefinesNamespace{
     
     String name;
     
-    HashMap<String, NamespaceElement<? extends Type>> allSymbols = new HashMap<String, NamespaceElement<? extends Type>>();
+    protected HashMap<String, NamespaceElement<? extends Type>> allSymbols = new HashMap<String, NamespaceElement<? extends Type>>();
     
-    HashMap<String, NamespaceElement<Type>> fields = null;
+    protected HashMap<String, NamespaceElement<Type>> fields = null;
     
-    HashMap<String, HashMap<Method.Signature, NamespaceElement<Method>>> methods = null;
+    protected HashMap<String, HashMap<Method.Signature, NamespaceElement<Method>>> methods = null;
     
-    HashMap<String, NamespaceElement<Namespace>> innerNamespaces = null;
+    protected HashMap<String, NamespaceElement<Namespace>> innerNamespaces = null;
     
-    HashMap<String, NamespaceElement<CpmClass>> innerTypes = null;
+    protected HashMap<String, NamespaceElement<CpmClass>> innerTypes = null;
     
-    HashMap<String, NamespaceElement<SynonymType>> innerSynonynms = null;
+    protected HashMap<String, NamespaceElement<SynonymType>> innerSynonynms = null;
     
     protected HashMap<String, NamedType> visibleTypeNames = null;
     
-    Namespace belongsTo;
+    DefinesNamespace belongsTo;
     
     String fileName;
     
     int line, pos;
     
-        private class NamespaceElement <T>{
+        protected class NamespaceElement <T>{
             
             T element;
             
@@ -67,7 +68,7 @@ public class Namespace implements DefinesNamespace{
     }
     
     private String getFieldsFullName(String field_name){
-        String rv = this.belongsTo.toString();
+        String rv = this.belongsTo != null ? this.belongsTo.toString() : "";
         if(rv.equals("") == false) rv += "::";
         rv += field_name;
         return rv;
@@ -121,7 +122,7 @@ public class Namespace implements DefinesNamespace{
         }
     }
     
-    public Namespace(String name, Namespace belongsTo){
+    public Namespace(String name, DefinesNamespace belongsTo){
         this.name = name;
         this.belongsTo = belongsTo;
         if(this.belongsTo != null){
@@ -148,15 +149,24 @@ public class Namespace implements DefinesNamespace{
     public void insertMethod(String name, Method m, String fileName, int line, int pos) throws CannotBeOverloaded,
                                                                                                ConflictingDeclaration,
                                                                                                ChangingMeaningOf,
-                                                                                               DiffrentSymbol {
+                                                                                               DiffrentSymbol,
+                                                                                               Redefinition{
         
         if(methods == null) methods = new HashMap<String, HashMap<Method.Signature, NamespaceElement<Method>>>();
         if(methods.containsKey(name) == true){
             HashMap<Method.Signature, NamespaceElement<Method>> ms = methods.get(name);
             if(ms.containsKey(m.getSignature())){
                 NamespaceElement<Method> old_m = ms.get(m.getSignature());
+                Method old = old_m.element;
                 String id = this.getFieldsFullName(name);
-                throw new CannotBeOverloaded(id, m, old_m.element, line, pos, old_m.fileName, old_m.line, old_m.pos);
+                if(m.identicalParameters(old) == true && m.getReturnType().equals(old.getReturnType()) == true){
+                    if(m.isDefined() && old.isDefined()){
+                        throw new Redefinition(id, m, line, pos, old, old_m.fileName, old_m.line, old_m.pos);
+                    }
+                }
+                else{
+                    throw new CannotBeOverloaded(m.toString(id), old_m.element.toString(id), line, pos, old_m.fileName, old_m.line, old_m.pos);
+                }
             }
             ms.put(m.getSignature(), new NamespaceElement<Method>(m, fileName, line, pos));
         }
@@ -216,11 +226,7 @@ public class Namespace implements DefinesNamespace{
         this.visibleTypeNames.put(name, syn);
     }
     
-    public Namespace insertInnerNamespace(String name, Namespace namespace) throws DiffrentSymbol,
-                                                                              ConflictingDeclaration,
-                                                                              ChangingMeaningOf,
-                                                                              CannotBeOverloaded,
-                                                                              Redefinition {
+    public Namespace insertInnerNamespace(String name, Namespace namespace) throws DiffrentSymbol{
 
         if(innerNamespaces == null) innerNamespaces = new HashMap<String, NamespaceElement<Namespace>>();
         this.checkForConflictsInDecl(name, namespace, namespace.line, namespace.pos);
@@ -243,7 +249,13 @@ public class Namespace implements DefinesNamespace{
             /*
              * merging the existing namespace with the extension declaration.
              */
-            rv = innerNamespaces.get(name).element;
+            NamespaceElement<Namespace> elem = this.innerNamespaces.get(name);
+            if(elem.fileName == null){
+                elem.fileName = namespace.fileName;
+                elem.line = namespace.line;
+                elem.line = namespace.pos;
+            }
+            rv = elem.element;
             /*
             if(namespace.fields != null){
                 for(String key : namespace.fields.keySet()){
@@ -347,7 +359,7 @@ public class Namespace implements DefinesNamespace{
     }
     
     @Override
-    public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference{
+    public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference, InvalidScopeResolution{
         DefinesNamespace rv;
         rv = this.findInnerNamespace(name, from_scope, ignore_access);
         if(rv == null && this.belongsTo != null){
@@ -374,8 +386,12 @@ public class Namespace implements DefinesNamespace{
     }
     
     @Override
-    public String getName(){
+    public String getFullName(){
         return this.getStringName(new StringBuilder()).toString();
     }
     
+    @Override
+    public String getName(){
+        return this.name;
+    }
 }
