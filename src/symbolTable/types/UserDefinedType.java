@@ -15,7 +15,7 @@ public class UserDefinedType extends SimpleType{
     NamedType type;
     
     public UserDefinedType(NamedType type, boolean isConst, boolean isVolatile) {
-        super(type.getName());
+        super(type.getFullName());
         this.type = type;
         this.isConst = isConst;
         this.isVolatile = isVolatile;
@@ -97,6 +97,91 @@ public class UserDefinedType extends SimpleType{
     @Override
     public boolean isComplete(CpmClass current) throws VoidDeclaration{
         return this.type.isComplete(current);
+    }
+    
+    @Override
+    public boolean isOverloadableWith(Type o, boolean isPointer){
+        if(o instanceof UserDefinedType){
+            if(isPointer == true){
+                if(this.isConst != o.isConst) return true;
+                if(this.isVolatile != o.isVolatile) return true;
+            }
+        }
+        return o.isOverloadableWith(this.type, isPointer);
+    }
+    
+    @Override
+    public boolean isOverloadableWith(NamedType o, boolean isPointer){
+        if(this.type instanceof CpmClass){
+            CpmClass _class = (CpmClass)this.type;
+            if(o instanceof CpmClass){
+                return !_class.equals(o);
+            }
+            else{
+                SynonymType s_t = (SynonymType)this.type;
+                if(s_t.getTag().equals("typedef") == true) return s_t.getSynonym().isOverloadableWith(this.type, isPointer);
+                /*
+                 * a class and an emun.
+                 */
+                return true;
+            }
+        }
+        else{
+            SynonymType s_t = (SynonymType)this.type;
+            if(o instanceof CpmClass){
+                if(s_t.getTag().equals("typedef") == true) return s_t.getSynonym().isOverloadableWith((CpmClass) o, isPointer);
+                /*
+                 * a class and an enum
+                 */
+                return true;
+            }
+            else{
+                SynonymType s_t1 = (SynonymType)o;
+                if(s_t.getTag().equals("typedef") == true){
+                    if(s_t1.getTag().equals("typedef") == true){
+                        return s_t.getSynonym().isOverloadableWith(s_t1.getSynonym(), isPointer);
+                    }
+                    else{
+                        return s_t.getSynonym().isOverloadableWith(s_t1, isPointer);
+                    }
+                }
+                else{
+                    if(s_t1.getTag().equals("typedef") == true){
+                        return s_t1.getSynonym().isOverloadableWith(s_t, isPointer);
+                    }
+                    else{
+                        /*
+                         * both are enums
+                         */
+                        return !s_t.equals(s_t1);
+                    }
+                }
+            }
+        }
+    }
+    
+    @Override
+    public int overloadHashCode(boolean isPointer) {
+        if(this.type instanceof CpmClass){
+            int hash = 7;
+            if(isPointer == true){
+                hash = hash*71 + (this.isConst ? 1 : 0);
+                hash = hash*71 + (this.isVolatile ? 1 : 0);
+            }
+            return hash + this.type.hashCode();
+        }
+        else{
+            SynonymType s_t = (SynonymType)this.type;
+            if(s_t.getTag().equals("typedef")) return s_t.getSynonym().overloadHashCode(isPointer);
+            else{
+                int hash = 7;
+                if(isPointer == true){
+                    hash = hash*71 + (this.isConst ? 1 : 0);
+                    hash = hash*71 + (this.isVolatile ? 1 : 0);
+                }
+                return hash*71 + s_t.hashCode();
+            }
+        }
     }
     
 }
