@@ -1,19 +1,10 @@
 package symbolTable.namespace;
 
-import errorHandling.AccessSpecViolation;
-import errorHandling.AmbiguousBaseClass;
-import errorHandling.AmbiguousReference;
-import errorHandling.CannotBeOverloaded;
-import errorHandling.ChangingMeaningOf;
-import errorHandling.ConflictingDeclaration;
-import errorHandling.ConflictingRVforVirtual;
-import errorHandling.InvalidCovariantForVirtual;
-import errorHandling.InvalidScopeResolution;
-import errorHandling.Redefinition;
-import errorHandling.SameNameAsParentClass;
+import errorHandling.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import symbolTable.types.Method;
 import symbolTable.types.Type;
 
@@ -95,6 +86,24 @@ public class CpmClass implements DefinesNamespace, NamedType{
                     this.line = line;
                     this.pos = pos;
                 }
+                
+                public ClassContentElement(ClassContentElement<T> elem){
+                    this.element = elem.element;
+                    this.access = elem.access;
+                    this.isStatic = elem.isStatic;
+                    this.fileName = elem.fileName;
+                    this.line = elem.line;
+                    this.pos = elem.pos;
+                }
+                
+                public ClassContentElement(ClassContentElement<T> elem, T new_element){
+                    this.element = new_element;
+                    this.access = elem.access;
+                    this.isStatic = elem.isStatic;
+                    this.fileName = elem.fileName;
+                    this.line = elem.line;
+                    this.pos = elem.pos;
+                }
 
                 @Override
                 public boolean equals(Object o){
@@ -104,6 +113,10 @@ public class CpmClass implements DefinesNamespace, NamedType{
                 @Override
                 public int hashCode() {
                     return this.element.hashCode();
+                }
+                
+                public T getElement(){
+                    return this.element;
                 }
             }
 
@@ -281,6 +294,13 @@ public class CpmClass implements DefinesNamespace, NamedType{
         this.visibleTypeNames.put(this.name, this);
     }
     
+    
+    public static CpmClass instantiateStlContainer(String template_name, List<Type> template_arguments){
+        
+        
+        return null;
+    }
+    
     public void visibleTypesThroughSuperClasses(ArrayList<CpmClass> superTypes){
         HashSet<String> removed = new HashSet<String>();
         if(this.visibleTypeNames == null) this.visibleTypeNames = new HashMap<String, NamedType>();
@@ -331,6 +351,25 @@ public class CpmClass implements DefinesNamespace, NamedType{
         this.visibleTypeNames = new HashMap<String, NamedType>(this.belongsTo.getVisibleTypeNames());
         this.access = access;
         this.addSelfToVisible();
+    }
+    
+    public CpmClass(CpmClass cpmClass){
+        this.name = cpmClass.name;
+        this.isComplete = cpmClass.isComplete;
+        this.belongsTo = cpmClass.belongsTo;
+        this.struct_union_or_class = cpmClass.struct_union_or_class;
+        this.visibleTypeNames = new HashMap<String, NamedType>(cpmClass.visibleTypeNames);
+        this.access = cpmClass.access;
+        this.allSymbols = new HashMap<String, ClassContentElement<? extends Type>> (cpmClass.allSymbols);
+    
+        if(cpmClass.superClasses != null) this.superClasses = new HashSet<CpmClass>(cpmClass.superClasses);
+        if(cpmClass.fields != null) this.fields = new HashMap<String, ClassContentElement<Type>>(cpmClass.fields);
+        if(cpmClass.innerTypes != null) this.innerTypes = new HashMap<String, ClassContentElement<CpmClass>>(cpmClass.innerTypes);
+        if(cpmClass.innerSynonyms != null) this.innerSynonyms = new HashMap<String, ClassContentElement<SynonymType>>(cpmClass.innerSynonyms);
+        if(cpmClass.methods != null) this.methods = new HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>> (cpmClass.methods);
+        if(cpmClass.constructors != null) this.constructors = new HashMap<Method.Signature, ClassContentElement<Method>> (cpmClass.constructors);
+        if(cpmClass.destructor != null) this.destructor = new ClassContentElement<Method>(cpmClass.destructor);
+        
     }
     
     /**

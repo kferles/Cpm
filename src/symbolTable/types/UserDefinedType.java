@@ -172,7 +172,8 @@ public class UserDefinedType extends SimpleType{
         }
         else{
             SynonymType s_t = (SynonymType)this.type;
-            if(s_t.getTag().equals("typedef")) return s_t.getSynonym().overloadHashCode(isPointer);
+            Type synonym = s_t.getSynonym();
+            if(s_t.getTag().equals("typedef")) return synonym != null ? s_t.getSynonym().overloadHashCode(isPointer) : 7*71;
             else{
                 int hash = 7;
                 if(isPointer == true){

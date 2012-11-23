@@ -15,6 +15,8 @@ public interface NamedType {
     
     String getFullName();
     
+    String getName();
+    
     String getTag();
     
     int getLine();
