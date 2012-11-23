@@ -107,7 +107,11 @@ public class CpmClass implements DefinesNamespace, NamedType{
 
                 @Override
                 public boolean equals(Object o){
-                    return this.element.equals(o);
+                    if(o == null) return false;
+                    if(o == this) return true;
+                    if(!(o instanceof ClassContentElement)) return false;
+                    
+                    return this.element.equals(((ClassContentElement<?>)o).element);
                 }
 
                 @Override
