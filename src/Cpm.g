@@ -1038,7 +1038,7 @@ external_declaration
 //options {k=1;}
 	: namespace_definition
 	//| (/*!!!*/nested_name_id '::' declarator[null] '{') => extern_method_definition
-	| ( declarator '{' )=> function_definition
+	| ( declaration_specifiers declarator '{' )=> function_definition
 	| declaration
 	;
 
