@@ -1,26 +1,12 @@
 package symbolTable;
 
-import errorHandling.AccessSpecViolation;
-import errorHandling.AmbiguousReference;
-import errorHandling.CannotBeOverloaded;
-import errorHandling.ChangingMeaningOf;
-import errorHandling.ConflictingDeclaration;
-import errorHandling.ConflictingRVforVirtual;
-import errorHandling.DiffrentSymbol;
-import errorHandling.DoesNotNameType;
-import errorHandling.InvalidCovariantForVirtual;
-import errorHandling.InvalidScopeResolution;
-import errorHandling.NotDeclared;
-import errorHandling.Redefinition;
-import errorHandling.SameNameAsParentClass;
+import errorHandling.*;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Stack;
-import symbolTable.namespace.CpmClass;
-import symbolTable.namespace.DefinesNamespace;
-import symbolTable.namespace.NamedType;
-import symbolTable.namespace.Namespace;
-import symbolTable.namespace.SynonymType;
+import symbolTable.namespace.*;
+import symbolTable.namespace.stl.container.StlContainer;
 import symbolTable.types.Method;
 import symbolTable.types.Type;
 
@@ -64,13 +50,6 @@ public class SymbolTable extends Namespace{
     
     CpmClass.AccessSpecifier current_access = null;
     
-    private String getNameAndPosInfo(String antlrs, Integer location[]){
-        String parts[] = antlrs.split(";");
-        location[0] = Integer.parseInt(parts[1]);
-        location[1] = Integer.parseInt(parts[2]);
-        return parts[0];
-    }
-    
     private Type getTypeFromCache(Type t){
         return cachedTypes.get(t);
     }
@@ -87,6 +66,72 @@ public class SymbolTable extends Namespace{
         }
         return stored_t;
     }
+    
+        public static class NestedNameInfo{
+
+            private String name;
+            
+            private int line,
+                pos;
+            
+            private boolean isTemplate;
+            
+            public NestedNameInfo(String name, int line, int pos, boolean isTemplate){
+                this.name = name;
+                this.line = line;
+                this.pos = pos;
+                this.isTemplate = isTemplate;
+            }
+            
+            public String getName(){
+                return this.name;
+            }
+            
+            public int getLine(){
+                return this.line;
+            }
+            
+            public int getPos(){
+                return this.pos;
+            }
+            
+            public boolean isTemplate(){
+                return this.isTemplate;
+            }
+            
+            @Override
+            public boolean equals(Object o){
+                if(o == null) return false;
+                
+                if(o instanceof NestedNameInfo){
+                    NestedNameInfo ninf = (NestedNameInfo) o;
+                    if(this.name.equals(ninf.name) == false) return false;
+                    if(this.line != ninf.line) return false;
+                    if(this.pos != ninf.pos) return false;
+                    if(this.isTemplate != ninf.isTemplate) return false;
+                    
+                    return true;
+                }
+                
+                return false;
+            }
+
+            @Override
+            public int hashCode() {
+                int hash = 7;
+                hash = 97 * hash + (this.name != null ? this.name.hashCode() : 0);
+                hash = 97 * hash + this.line;
+                hash = 97 * hash + this.pos;
+                hash = 97 * hash + (this.isTemplate ? 1 : 0);
+                return hash;
+            }
+            
+            @Override
+            public String toString(){
+                return this.name + ";" + line + ";" + pos + ";" + isTemplate;
+            }
+
+        }
     
     public SymbolTable(){
         super("", null);
@@ -238,7 +283,88 @@ public class SymbolTable extends Namespace{
         return this.type == ScopeType.Class;
     }
     
-    public NamedType getNamedTypeFromNestedNameId(ArrayList<String> chain, boolean explicitGlobalScope, boolean allowNull, boolean ignore_access) 
+    public NamedType instantiateTemplates(ArrayList<NestedNameInfo> chain, boolean explicitGlobalScope, List<List<Type>> templateArgs){
+        NamedType rv = null;
+
+        DefinesNamespace curr = this.getCurrentNamespace();
+
+        NestedNameInfo inf;
+        String t_name;
+        //int line, pos;
+        
+        try{
+            
+            if(chain.isEmpty() == true) return null;
+            
+            if(chain.size() == 1) {
+                inf = chain.get(0);
+                t_name = inf.getName();
+                NamedType t;
+                if(explicitGlobalScope == true) {
+                    t = super.findNamedType(t_name, curr, false);
+                }
+                else{
+                    t = curr.isValidNamedType(t_name, false);
+                }
+
+                if(inf.isTemplate() == true){
+                    StlContainer container = (StlContainer) t;
+                    rv = container.instantiate(templateArgs.get(0));
+                }
+                else{
+                    rv = t;         //probalbly usless ...
+                }
+            }
+            else {
+                DefinesNamespace runner;
+                inf = chain.get(0);
+                t_name = inf.getName();
+                int templateArgIndex = 0;
+                
+                if(explicitGlobalScope == true) {
+                    runner = super.findNamespace(t_name, curr, false);
+                }
+                else {
+                    runner = curr.findNamespace(t_name, curr, false);
+                }
+                
+                if(inf.isTemplate() == true){
+                    StlContainer container = (StlContainer) runner;
+                    runner = container.instantiate(templateArgs.get(templateArgIndex++));
+                }
+                
+                int i;
+                for(i = 1 ; i < chain.size() - 1 ; ++i){
+                    inf = chain.get(i);
+                    t_name = inf.getName();
+                    runner = runner.findInnerNamespace(t_name, curr, false);
+                    
+                    if(inf.isTemplate() == true){
+                        StlContainer container = (StlContainer) runner;
+                        runner = container.instantiate(templateArgs.get(templateArgIndex++));
+                    }
+                }
+                
+                inf = chain.get(i);
+                t_name = inf.getName();
+                rv = runner.findNamedType(t_name, curr, false);
+                
+                if(inf.isTemplate() == true){
+                    StlContainer container = (StlContainer) rv;
+                    rv = container.instantiate(templateArgs.get(templateArgIndex++));
+                }
+            }
+        }
+        catch(ErrorMessage _){
+            //There should be thrown no error message in the try segment,
+            //because this method is being called when isValidNamedType predicate (antlr) is true
+        }
+        
+        return rv;
+ 
+    }
+    
+    public NamedType getNamedTypeFromNestedNameId(ArrayList<NestedNameInfo> chain, boolean explicitGlobalScope, boolean allowNull, boolean ignore_access) 
                                                                                                         throws AccessSpecViolation, 
                                                                                                                AmbiguousReference,
                                                                                                                NotDeclared,
@@ -246,13 +372,14 @@ public class SymbolTable extends Namespace{
                                                                                                                DoesNotNameType {
         NamedType rv = null;
         DefinesNamespace curr = this.getCurrentNamespace();
+        NestedNameInfo tmp;
         int line, pos;
-        Integer location[] = new Integer[2];
         if(chain.size() == 1){
             String t_name;
-            t_name = this.getNameAndPosInfo(chain.get(0), location);
-            line = location[0];
-            pos = location[1];
+            tmp = chain.get(0);
+            t_name = tmp.getName();
+            line = tmp.getLine();
+            pos = tmp.getPos();
             try{
                 if(explicitGlobalScope == true){
                     rv = super.findNamedType(t_name, curr, ignore_access);
@@ -278,9 +405,10 @@ public class SymbolTable extends Namespace{
         }
         else{
             DefinesNamespace runner;
-            String namespaceName = this.getNameAndPosInfo(chain.get(0), location);
-            line = location[0];
-            pos = location[1];
+            tmp = chain.get(0);
+            String namespaceName = tmp.getName();
+            line = tmp.getLine();
+            pos = tmp.getPos();
             DefinesNamespace prev = null;
             int i = 0;
             try{
@@ -295,15 +423,15 @@ public class SymbolTable extends Namespace{
 
                 for(i = 1 ; i < chain.size() - 1 ; ++i){
                     prev = runner;
-                    namespaceName = this.getNameAndPosInfo(chain.get(i), location);
-                    line = location[0];
-                    pos = location[1];
+                    tmp = chain.get(i);
+                    namespaceName = tmp.getName();
+                    line = tmp.getLine();
+                    pos = tmp.getPos();
                     runner = runner.findInnerNamespace(namespaceName, curr, ignore_access);
                     if(runner == null) throw new NotDeclared(prev + "::" + namespaceName, line, pos);
                 }
-                namespaceName = this.getNameAndPosInfo(chain.get(i), location);
-                line = location[0];
-                pos = location[1];
+                tmp = chain.get(i);
+                namespaceName = tmp.getName();
                 rv = runner.findNamedType(namespaceName, curr, ignore_access);
 
                 if(rv == null) throw new DoesNotNameType(namespaceName);

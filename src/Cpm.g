@@ -29,7 +29,7 @@ This grammar requires ANTLR v3.0.1 or higher.
 
 Terence Parr
 July 2006
-*/ 
+*/
 grammar Cpm;
 options {
     backtrack=true;
@@ -109,6 +109,7 @@ import java.util.Stack;
 import symbolTable.SymbolTable;
 import symbolTable.types.*;
 import symbolTable.namespace.*;
+import symbolTable.namespace.stl.container.StlContainer;
 import errorHandling.*;
 import preprocessor.*;
 }
@@ -121,6 +122,10 @@ import preprocessor.*;
 	//Preprocessor Information
 	PreprocessorInfo preproc = new PreprocessorInfo();
 
+	boolean inStlFile = false;
+	
+	String stlFile = null;
+	
 	//error messages
 	
 	private class DeclSpecifierError extends Exception{
@@ -157,6 +162,13 @@ import preprocessor.*;
 	public void displayRecognitionError(String[] tokenNames, RecognitionException e) {
 		//Change line number in error reporting HERE !!!!
 		//System.out.println(e.input.getSourceName());
+		//ugly, ugly ... But there is no obvious way to avoid it
+		if(this.pending_undeclared_err == null &&
+		   this.pending_ambiguous == null &&
+		   this.pending_access_viol == null){
+			if( e instanceof EarlyExitException ) return;
+		}
+
 		System.err.print(this.preproc.getHeaderError());
 		e.line = this.preproc.getOriginalFileLine(e.line);
 		super.displayRecognitionError(tokenNames, e);
@@ -164,6 +176,7 @@ import preprocessor.*;
 	
 	public String getErrorMessage(RecognitionException e, String[] tokenNames){
 		//e.token.setLine(e.token.getLine()+1);
+		
 		if(paraphrases.size() > 0){
 			String rv = "";
 			for(Object o : paraphrases)
@@ -556,32 +569,56 @@ import preprocessor.*;
 	
 	//nested name id as type specifier aux methods and fields
 	
-	HashMap<ArrayList<String>, NamedType> successes = new HashMap<ArrayList<String>, NamedType>();
+	HashMap<ArrayList<SymbolTable.NestedNameInfo>, NamedType> successes = new HashMap<ArrayList<SymbolTable.NestedNameInfo>, NamedType>();
 	
-	HashSet<String> failures = new HashSet<String>();
+	HashSet<SymbolTable.NestedNameInfo> failures = new HashSet<SymbolTable.NestedNameInfo>();
 	
-	private NamedType getNamedType(ArrayList<String> chain){
-		NamedType rv = successes.get(chain);
-		successes.clear();
+	private NamedType getNamedType(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope, boolean isTemplate, List<List<Type>> tmplArgs){
+		NamedType rv;
+		
+		if(isTemplate == true){
+			rv = this.symbolTable.instantiateTemplates(chain, explicitGlobalScope, tmplArgs);
+		}
+		else{
+			rv = successes.get(chain);
+		}
+		/*
+		 * todo: clear maps more oftens
+		 */
+		//successes.clear();
+		//failures.clear();
 		return rv;
 	}
 	
-	private boolean isValidNamedType(ArrayList<String> chain, boolean explicitGlobalScope){
+	private boolean isValidNamedType(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope){
 		NamedType t = null;
+
+		/*if(chain.size() == 1 && chain.get(0).getName().equals("list") == true) {
+			System.out.println("Here");
+			return true; 
+		}*/
+
+		if(chain.isEmpty() == true) {
+			return false;
+		}
 		
-		if(chain.isEmpty() == true) return false;
 		/*
 		 * if chain is a key in the successes HashMap retrun treu
 		 */
-		if(successes.containsKey(chain) == true) return true;
+		if(successes.containsKey(chain) == true) {
+			return true;
+		}
 		
 		/*
 		 * if the arrayList has at least one identifier inside the failures return false
 		 */
-		for(String s : chain) if(failures.contains(s) == true) return false;
-		
+		for(SymbolTable.NestedNameInfo inf : chain)
+			if(failures.contains(inf) == true){
+				return false; 
+			}
+
 		try{
-			t = symbolTable.getNamedTypeFromNestedNameId(chain, explicitGlobalScope, false, false);			
+			t = symbolTable.getNamedTypeFromNestedNameId(chain, explicitGlobalScope, false, false);
 		}
 		catch(AccessSpecViolation access_viol){
 			//if chain size is 1 the error must be pending
@@ -613,10 +650,10 @@ import preprocessor.*;
 	  	catch(DoesNotNameType nt){
 	  		pending_undeclared_err = nt.getMessage();
 	  	}
-	  	
+
 	  	if(t == null){
-	  		for(String s : chain)
-	  			this.failures.add(s);
+	  		for(SymbolTable.NestedNameInfo inf : chain)
+	  			this.failures.add(inf);
 	  	}
 	  	else{
 	  		this.successes.put(chain, t);
@@ -625,7 +662,7 @@ import preprocessor.*;
 	  	return t == null ? false : true;
 	}
 	
-	private CpmClass isValidBaseClass(ArrayList<String> chain, boolean explicitGlobalScope, char token) throws Exception, BaseClassCVQual{
+	private CpmClass isValidBaseClass(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope, char token) throws Exception, BaseClassCVQual{
 		CpmClass rv = null;
 		try{
 			NamedType named_t = symbolTable.getNamedTypeFromNestedNameId(chain, explicitGlobalScope, false, false);
@@ -1001,10 +1038,10 @@ external_declaration
 //options {k=1;}
 	: namespace_definition
 	//| (/*!!!*/nested_name_id '::' declarator[null] '{') => extern_method_definition
-	| (declaration_specifiers declarator '{' )=> function_definition
+	| ( declarator '{' )=> function_definition
 	| declaration
 	;
-	
+
 namespace_definition
 scope normal_mode_fail_level;
 @init{
@@ -1043,6 +1080,7 @@ scope normal_mode_fail_level;
 scope parameters_id;
 @init{
 	$declarator_strings::dir_decl_identifier = null;
+	$declarator_strings::dir_decl_error = null;
 	$decl_infered::declarator = null;
 	$parameters_id::parameters_ids = null;
 	$function_definition::methods_type = null;
@@ -1067,7 +1105,7 @@ scope parameters_id;
 	;
 
 declaration
-options{ k=3;}
+options{ k = 3; }
 scope{
   boolean isTypedef;
 }
@@ -1081,7 +1119,7 @@ scope{
 	| (struct_union_or_class IDENTIFIER '{') => struct_union_or_class_definition ';'
 	| (struct_union_or_class nested_name_id ':' 'public') => extern_class_definition ';'
 	| (struct_union_or_class nested_name_id '{') => extern_class_definition ';'
-	|'typedef' { $declaration::isTypedef = true; } simple_declaration ';' // special case, looking for typedef	
+	|'typedef' { $declaration::isTypedef = true; } simple_declaration ';'
 	| simple_declaration ';'
 	| line_marker
 	;
@@ -1089,13 +1127,17 @@ scope{
 simple_declaration
 scope{
 	boolean possible_fwd_decl;
-	String[] inf;
+	SymbolTable.NestedNameInfo inf;
 	String tag;
+	boolean isEnumDef;
+	String enumId;
 }
 @init{
 	$simple_declaration::possible_fwd_decl = false;
 	$simple_declaration::inf = null;
 	$simple_declaration::tag = null;
+	$simple_declaration::isEnumDef = false;
+	$simple_declaration::enumId = null;
 }
  	:
 	  declaration_specifiers
@@ -1106,63 +1148,49 @@ scope{
 	      if($decl_list.tree == null){
 	      	  if($declaration_specifiers.isFwdDecl == false){
 	      	  	if($simple_declaration::possible_fwd_decl == true && $declaration_specifiers.t != null){
-	      	  		String name = $simple_declaration::inf[0];
+	      	  		String name = $simple_declaration::inf.getName();
 	      	  		CpmClass _class = new CpmClass($simple_declaration::tag, 
 	  					      name, 
 	  					      symbolTable.getCurrentNamespace(),
 	  					      symbolTable.getCurrentAccess(),
 	  					      false);
-	  			_class.setLineAndPos(Integer.parseInt($simple_declaration::inf[1]),
-	  					     Integer.parseInt($simple_declaration::inf[2]));
+	  			_class.setLineAndPos($simple_declaration::inf.getLine(),
+	  					     $simple_declaration::inf.getPos());
 	  			this.insertClass(name, _class);
 	      	  	}
 	      	  	else{
 		      	  	if($declaration_specifiers.error != null){
-		      	  		yield_error($declaration_specifiers.error, 
+		      	  		this.yield_error($declaration_specifiers.error, 
 			      	  		    fixLine($declaration_specifiers.start),
 			      	  		    $declaration_specifiers.start.getCharPositionInLine());
 		      	  	}
-		      	  	else{
-		      	  		yield_error("error: declaration does not declare anything", 
+		      	  	else if($simple_declaration::isEnumDef == false){
+		      	  		this.yield_error("error: declaration does not declare anything", 
 		      	  			    fixLine($declaration_specifiers.start),
 		      	  		    	    $declaration_specifiers.start.getCharPositionInLine());
 		      	  	}
+		      	  	//else{
+		      	  	//	Token declSpecTok = $declaration_specifiers.start;
+		      	  		
+		      	  	//}
 	      	  	}
 	      	  }
-	      	  else if($declaration_specifiers.hasQuals){
-	      	  	yield_error("error: qualifiers can only be specified for objects and functions",
-	      	  		    fixLine($declaration_specifiers.start),
-	      	  		    $declaration_specifiers.start.getCharPositionInLine());
+	      	  else{ 
+	      	  	if($declaration_specifiers.hasQuals){
+	      	  		yield_error("error: qualifiers can only be specified for objects and functions",
+	      	  			    fixLine($declaration_specifiers.start),
+	      	  			    $declaration_specifiers.start.getCharPositionInLine());
+	      	  	}
+	      	  	
+	      	  	if($simple_declaration::isEnumDef == true){
+	      	  	
+	      	  	}
 	      	  }
 	      }
 	  }
 	  ;
-	  
 	
-template_declaration
-	:  template_specifier declarator
-	;
-	
-template_specifier 
-	: nested_template_id '<' template_parameter_list '>'
-	;
-	
-nested_template_id
-	: nested_name_id '::' template_type_id
-	| template_type_id
-	;
-	
-template_parameter_list
-options{k = 2;}
-	: template_specifier
-	| parameter_type_list
-	;
-	
-template_type_id
-	: IDENTIFIER
-	;
-	
-declaration_specifiers returns [Type t, boolean isFwdDecl, boolean hasQuals, String error, String init_decl_err, InClassDeclSpec class_specs]
+declaration_specifiers returns [Type t, boolean isFwdDecl, boolean hasQuals, String error, String init_decl_err, InClassDeclSpec class_specs, boolean isEnum]
 scope Type_Spec;
 scope cv_qual;
 scope storage_class_spec;
@@ -1229,11 +1257,12 @@ scope function_spec;
              		}
              		//other cases
              	}
+
              }
 	;
-	catch [EarlyExitException _]{
-	
-	}
+	//catch [EarlyExitException e]{
+	//	if(this.pending_undeclared_err != null) throw e;
+	//}declarator
 
 	
 	
@@ -1260,18 +1289,23 @@ function_specifier
 //	: init_declarator_list[$error, $data_type, $class_specs]?
 //	;
 
-init_declarator_list [String error, Type data_type, InClassDeclSpec class_specs]
+init_declarator_list [String error, Type data_type, InClassDeclSpec class_specs] returns [boolean newTypeInRv]
 scope{
 	boolean first;
+	boolean newTinRv;
 }
 @init{
 	$init_declarator_list::first = true;
+	$init_declarator_list::newTinRv = false;
 }
 	: init_declarator [$error, $data_type, $class_specs] { $init_declarator_list::first = false; } 
 	  (',' init_declarator[$error, $data_type, $class_specs])*
+	  {
+	  	$newTypeInRv = $init_declarator_list::newTinRv;
+	  }
 	;
 
-init_declarator [String error, Type data_type, InClassDeclSpec class_specs]
+init_declarator [String error, Type data_type, InClassDeclSpec class_specs] 
 scope declarator_strings;
 scope decl_infered;
 scope decl_id_info;
@@ -1279,13 +1313,14 @@ scope decl_id_info;
 	$declarator_strings::dir_decl_identifier = null;
 	$declarator_strings::dir_decl_error = $error;
 	$decl_infered::declarator = null;
+	
 }
 	: declarator { not_null_decl_id($declarator_strings::dir_decl_identifier, $declarator_strings::dir_decl_error, $declarator.start) }? 
 	  ('=' initializer)?
 	  {	//todo: error for typedef with initializer
 	  	if($declarator_strings::dir_decl_identifier != null){
+	  		DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
 		  	if($data_type != null){
-			  	DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
 			  	String declarator_id = $declarator_strings::dir_decl_identifier;
 			  	int id_line = $decl_id_info::line;
 			  	int id_pos = $decl_id_info::pos;
@@ -1328,16 +1363,35 @@ scope decl_id_info;
 				  		}
 				  		else if(decl_inf_t.m_rv != null){
 				  			System.out.println(decl_inf_t.m_rv.toString(declarator_id));
-				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
-					  			this.insertSynonym(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
-					  		}
-					  		else{
-				  				//if(this.symbolTable.isCurrentNamespaceClass() == true){
-				  				if($function_definition.size() > 0){
-				  					decl_inf_t.m_rv.setIsDefined();
-				  					$function_definition::methods_type = decl_inf_t.m_rv;
+				  			if(($struct_union_or_class_definition.size() > 0 && $class_declaration_list.size() == 0) ||
+				  			    $extern_class_definition.size() > 0 ||
+				  			   ($simple_declaration.size() > 0 && $simple_declaration::isEnumDef == true) ){
+				  			   
+				  			   	$init_declarator_list::newTinRv = true;
+				  			   	Token declaratorTok = $declarator.start;
+				  				this.yield_error("error: new types may not be defined in a return type",
+				  						 this.fixLine(declaratorTok),
+				  						 declaratorTok.getCharPositionInLine());
+
+				  				if($simple_declaration::isEnumDef == true){
+				  					this.yield_error("note: perhaps a semicolon is missing after the definition of '" + 
+				  							  $simple_declaration::enumId + "'",
+		      	  				 			 	this.fixLine(declaratorTok),
+		      	  				 				declaratorTok.getCharPositionInLine());
 				  				}
-				  				this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+				  			}
+				  			else{
+					  			if($declaration.size() > 0 && $declaration::isTypedef == true){
+						  			this.insertSynonym(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+						  		}
+						  		else{
+					  				//if(this.symbolTable.isCurrentNamespaceClass() == true){
+					  				if($function_definition.size() > 0){
+					  					decl_inf_t.m_rv.setIsDefined();
+					  					$function_definition::methods_type = decl_inf_t.m_rv;
+					  				}
+					  				this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+						  		}
 					  		}
 				  			
 				  		}
@@ -1356,7 +1410,7 @@ scope decl_id_info;
 			  		}
 			  	}
 		  	}
-		  	else if($declarator_strings::dir_decl_error == null){
+		  	else if($declarator_strings::dir_decl_error == null && decl_inf_t != null && decl_inf_t.m_pend != null){
 		  		this.yield_error("error: C+- forbids declaration of '" + $declarator_strings::dir_decl_identifier + "' with no type",
 		  				 this.fixLine($declarator.start),
 		  				 $declarator.start.getCharPositionInLine());
@@ -1446,48 +1500,108 @@ type_specifier
 	| nested_name_id 
 	  { $Type_Spec::type[1] = true;
 	    $Type_Spec::userDefinedCount++;
-	    /*
-	     * IMPROVE this so this method will not be called again (needs a more complex cache)
-	     */
-	    $Type_Spec::named_t = this.getNamedType($nested_name_id.names_chain);
+
+	    $Type_Spec::named_t = this.getNamedType($nested_name_id.names_chain,
+	    		      			    $nested_name_id.explicitGlobalScope,
+	    		      			    $nested_name_id.containsTemplate,
+	    		      			    $nested_name_id.templateArgs);
+
 	    //$Type_Spec::named_t = cached_named_t;
 	  }
 	  /*
-	   * Here also check if the nested_name_id is any other kind of symbol ...
+	   * Also check if the nested_name_id is any other kind of symbol ...
 	   */
-	  { this.normal_mode == false ||
-	    (isValidNamedType($nested_name_id.names_chain, $nested_name_id.explicitGlobalScope) == true)}?
-	/*| enum_specifier
-	| nested_template_id*/
+	  {  this.normal_mode == false ||
+	    (isValidNamedType($nested_name_id.names_chain,
+	    		      $nested_name_id.explicitGlobalScope) == true)}?
+	| enum_specifier
 	;
 	catch[FailedPredicateException ex]{
-	
+		//System.out.println("Here");
 	}
 
 	
-nested_name_id returns [ArrayList<String> names_chain, boolean explicitGlobalScope]
+nested_name_id returns [ArrayList<SymbolTable.NestedNameInfo> names_chain, 
+			boolean explicitGlobalScope, boolean containsTemplate,
+			List<List<Type>> templateArgs]
+options{k = 3;}
 scope{
-  ArrayList<String> names;
+  ArrayList<SymbolTable.NestedNameInfo> names;
+  boolean isTemplateId;
+  List<List<Type>> arguments;
 }
 @init{
-  $nested_name_id::names = new ArrayList<String>();
+  $nested_name_id::names = new ArrayList<SymbolTable.NestedNameInfo>();
+  $nested_name_id::isTemplateId = false;
+  $nested_name_id::arguments = new ArrayList<List<Type>> ();
   $explicitGlobalScope = input.LT(1).getText().equals("::") ? true : false;
   $names_chain = $nested_name_id::names;
 }
-	: '::'? name_id scope_resolution*
+@after{
+	$templateArgs = $nested_name_id::arguments;
+	$containsTemplate = $nested_name_id::isTemplateId;
+}
+	: '::'? id scope_resolution*
 	;
 	
 scope_resolution
-	: '::' name_id
+	: '::' id
 	;
+	
+id
+  : template_id
+  | name_id
+  ;
 
 name_id
 @init{
   Token id = input.LT(1);
-  $nested_name_id::names.add(id.getText() + ";" + this.fixLine(id) + ";" + id.getCharPositionInLine());
+  $nested_name_id::names.add(new SymbolTable.NestedNameInfo(id.getText(), this.fixLine(id), id.getCharPositionInLine(), false));
 }
-    : IDENTIFIER 
+    : IDENTIFIER
     ;
+
+template_id
+scope{
+	List<Type> template_arguments;
+}
+@init{
+  Token id = input.LT(1);
+  SymbolTable.NestedNameInfo inf = new SymbolTable.NestedNameInfo(id.getText(), this.fixLine(id), id.getCharPositionInLine(), true);
+  
+  if($nested_name_id::names.isEmpty() || $nested_name_id::names.indexOf(inf) != $nested_name_id::names.size() - 1)
+  	$nested_name_id::names.add(inf);
+}
+@after{
+  $nested_name_id::isTemplateId = true;
+  $nested_name_id::arguments.add($template_id::template_arguments);
+}
+	: 
+	  { 
+	    $template_id::template_arguments = new ArrayList<Type> (); 
+	  }
+	  IDENTIFIER '<' template_argument_list '>'
+	  {
+	  	/*if(this.pending_undeclared_err != null){
+	  		Token t = $IDENTIFIER;
+	  		int line = this.fixLine(t);
+	  		int pos = t.getCharPositionInLine();
+	  		this.yield_error(this.pending_undeclared_err, line, pos);
+	  	}*/
+	  }
+	;
+
+template_argument_list
+	: template_argument ',' template_argument_list
+	| template_argument
+	;
+
+template_argument
+	: type_name["template argument"]
+	  {
+	    $template_id::template_arguments.add($type_name.tp);
+	  }
+	;
 
 struct_union_or_class_specifier
 	: struct_union_or_class nested_name_id
@@ -1498,10 +1612,10 @@ struct_union_or_class_specifier
 	  		$Type_Spec::userDefinedCount++;
 	  		named_t = symbolTable.getNamedTypeFromNestedNameId($nested_name_id.names_chain, $nested_name_id.explicitGlobalScope, true, false);
 	  		if(named_t == null){
-	  			String info[] = $nested_name_id.names_chain.get(0).split(";");
-	  			String name = info[0];
-	  			int line = Integer.parseInt(info[1]);
-	  			int pos = Integer.parseInt(info[2]);
+	  			SymbolTable.NestedNameInfo info = $nested_name_id.names_chain.get(0);
+	  			String name = info.getName();
+	  			int line = info.getLine();
+	  			int pos = info.getPos();
 	  			$Type_Spec::isForwardDeclaration = true; 
 	  			CpmClass _class = new CpmClass($struct_union_or_class.start.getText(), 
 	  					      name, 
@@ -1530,10 +1644,10 @@ struct_union_or_class_specifier
 	  	}
 	  	catch(AmbiguousReference ambiguous){
 	  		if($nested_name_id.names_chain.size() == 1){
-	  			String info[] = $nested_name_id.names_chain.get(0).split(";");
-	  			String name = info[0];
-	  			int line = Integer.parseInt(info[1]);
-	  			int pos = Integer.parseInt(info[2]);
+	  			SymbolTable.NestedNameInfo info = $nested_name_id.names_chain.get(0);
+	  			String name = info.getName();
+	  			int line = info.getLine();
+	  			int pos = info.getPos();
 	  			$Type_Spec::isForwardDeclaration = true;
 	  			CpmClass _class = new CpmClass($struct_union_or_class.start.getText(), 
 	  							   name, 
@@ -1567,7 +1681,7 @@ struct_union_or_class_specifier
 	  		if($simple_declaration.size() > 0){
 		  		if($nested_name_id.names_chain.size() == 1 && $Type_Spec::named_t.getParentNamespace() != this.symbolTable.getCurrentNamespace()) {
 		  			$simple_declaration::possible_fwd_decl = true;
-		  			$simple_declaration::inf = $nested_name_id.names_chain.get(0).split(";");
+		  			$simple_declaration::inf = $nested_name_id.names_chain.get(0);
 		  			$simple_declaration::tag = $struct_union_or_class.start.getText();
 		  		}
 		  		else{
@@ -1596,11 +1710,16 @@ scope normal_mode_fail_level;
 	  	CpmClass _class = null;
 	  	String name = $IDENTIFIER.text;
 	  	String tag = $struct_union_or_class.start.getText();
-	  	if($base_classes.tree == null){
-	  		_class = new CpmClass(tag, name, symbolTable.getCurrentNamespace(), symbolTable.getCurrentAccess(), true);
+	  	if(this.inStlFile == false){
+		  	if($base_classes.tree == null){
+		  		_class = new CpmClass(tag, name, symbolTable.getCurrentNamespace(), symbolTable.getCurrentAccess(), true);
+		  	}
+		  	else{
+		  		_class = new CpmClass(tag, name, symbolTable.getCurrentNamespace(), $collect_base_classes::superClasses, symbolTable.getCurrentAccess());
+		  	}
 	  	}
 	  	else{
-	  		_class = new CpmClass(tag, name, symbolTable.getCurrentNamespace(), $collect_base_classes::superClasses, symbolTable.getCurrentAccess());
+	  		_class = StlContainer.createGenericContainer($IDENTIFIER.text, this.symbolTable.getCurrentNamespace());
 	  	}
 	  	$struct_union_or_class_definition::t = new UserDefinedType(_class, false, false);
 	  	_class.setLineAndPos(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
@@ -1625,7 +1744,17 @@ scope normal_mode_fail_level;
   	  {
   	  	this.symbolTable.endScope();
   	  }
-  	  init_declarator_list[null, $struct_union_or_class_definition::t, new InClassDeclSpec(false, false, false)]? turn_on_normal_mode
+  	  init_declarator_list[null, $struct_union_or_class_definition::t, new InClassDeclSpec(false, false, false)]? 
+  	  {
+  	  	if($init_declarator_list.tree != null && $init_declarator_list.newTypeInRv == true){
+  	  		
+  	  		Token idTok = $IDENTIFIER;
+  	  		this.yield_error("note: perhaps a semicolon is missing after the definition of '" + idTok.getText() + "'",
+  	  				 this.fixLine(idTok),
+  	  				 idTok.getCharPositionInLine());
+  	  	}
+  	  }
+  	  turn_on_normal_mode
 	;
 	
 extern_class_definition
@@ -1638,10 +1767,19 @@ scope normal_mode_fail_level;
 	$extern_class_definition::t = null;
 	$normal_mode_fail_level::failed = false;
 }
-	: struct_union_or_class nested_name_id (':' { $collect_base_classes::superClasses = new ArrayList<CpmClass>(); } base_classes = base_class_list)?
+	: struct_union_or_class nested_name_id
+	  {
+	  	if($nested_name_id.containsTemplate == true){
+	  		Token nameTok = $nested_name_id.start;
+	  		this.yield_error("error: invalid class name (contains template class)",
+	  				 this.fixLine(nameTok),
+	  				 nameTok.getCharPositionInLine());
+	  	}
+	  }
+	  (':' { $collect_base_classes::superClasses = new ArrayList<CpmClass>(); } base_classes = base_class_list)?
 	  {
 	  	NamedType t = null;
-	  	ArrayList<String> chain = $nested_name_id.names_chain;
+	  	ArrayList<SymbolTable.NestedNameInfo> chain = $nested_name_id.names_chain;
 	  	boolean explicitGlobalScope = $nested_name_id.explicitGlobalScope;
 	  	int line = this.fixLine($nested_name_id.start);
 	  	int pos = $nested_name_id.start.getCharPositionInLine();
@@ -1722,7 +1860,17 @@ scope normal_mode_fail_level;
 	  {
   	  	this.symbolTable.endScope();
   	  }
-  	  init_declarator_list[null, $extern_class_definition::t, new InClassDeclSpec(false, false, false)]? turn_on_normal_mode
+  	  init_declarator_list[null, $extern_class_definition::t, new InClassDeclSpec(false, false, false)]? 
+  	  {
+  	  	if($init_declarator_list.tree != null && $init_declarator_list.newTypeInRv == true){
+  	  		
+  	  		Token idTok = $nested_name_id.stop;
+  	  		this.yield_error("note: perhaps a semicolon is missing after the definition of '" + idTok.getText() + "'",
+  	  				 this.fixLine(idTok),
+  	  				 idTok.getCharPositionInLine());
+  	  	}
+  	  }
+  	  turn_on_normal_mode
 	;
 	
 turn_on_normal_mode
@@ -1816,6 +1964,9 @@ access_specifier
 	;
 
 class_declaration_list
+scope{
+	boolean declList;
+}
 	: class_content_element*
 	;
 	
@@ -1910,17 +2061,61 @@ in_class_declaration
 	| declaration
 	;
 	
+
+specifier_qualifier_list returns [Type t, String error, String init_decl_err]
+scope Type_Spec;
+scope cv_qual;
+@init{
+	
+	Type_Spec_at_init();
+	cv_qual_at_init();
+}
+	: (   type_qualifier
+           |  type_specifier)+
+           {
+           	Type_Spec_scope type_specs = get_Type_Spec_scope();
+             	cv_qual_scope cv_quals = get_cv_qual_scope();
+		boolean isConst = cv_quals.constCount != 0 ? true : false,
+             		isVolatile = cv_quals.volatileCount != 0 ? true : false;
+
+		int countTypes = 0;
+             	for(boolean t : type_specs.type) if(t == true) ++countTypes;
+             	if(countTypes > 1){	//multiple data types
+             		$error = "error: two or more data types in declaration";
+             		$init_decl_err = " of";
+             	}
+             	else{
+             		//declaration secifiers is for primitive type
+             		if(type_specs.type[0] == true){
+             			try{
+             				$t = type_specs.counters.checkSpecForPrimitives(isConst, isVolatile);
+             			}
+             			catch(DeclSpecifierError ex){	
+             				//erro in declaration specs for a primitive type
+             				$error = ex.error;
+             				$init_decl_err = ex.init_delc_list_err;
+             			}
+             		}
+             		//declaration specifiers for user defined type
+             		else if(type_specs.type[1] == true){
+             			if(type_specs.userDefinedCount > 1){
+             				$error = "error: two or more data types in declaration";
+             				$init_decl_err = " of";
+             			}
+             			else{
+             				if(type_specs.error_inUserDefined == false && type_specs.named_t != null){
+             					$t = new UserDefinedType(type_specs.named_t, isConst, isVolatile);
+             				}
+             			}
+             		}
+             		//other cases
+             	}
+           }
+	;
 inclass_function_definition
 	: specifier_qualifier_list declarator compound_statement
 	;
 
-specifier_qualifier_list //fix me
-	: (storage_class_specifier
-           |   type_qualifier
-           |   function_specifier
-           |   type_specifier
-           |   'friend')+
-	;
 
 class_declarator_list
 	: class_declarator (',' class_declarator)*
@@ -1933,17 +2128,142 @@ class_declarator
 
 enum_specifier
 options {k=3;}
-	: 'enum' '{' enumerator_list '}'
-	| 'enum' IDENTIFIER '{' enumerator_list '}'
-	| 'enum' IDENTIFIER
+scope{
+	UserDefinedType enumeration;
+	InClassDeclSpec spec;
+}
+	: //'enum' '{' enumerator_list '}'
+	  'enum' IDENTIFIER 
+	  {
+	  	$simple_declaration::isEnumDef = true;
+	  	$simple_declaration::enumId = $IDENTIFIER.text;
+	  	$Type_Spec::type[1] = true;
+	  	$Type_Spec::userDefinedCount++;
+	  	Token idTok = $IDENTIFIER;
+	  	String name = idTok.getText();
+	  	int line = this.fixLine(idTok);
+	  	int pos = idTok.getCharPositionInLine();
+	  	$enum_specifier::spec = new InClassDeclSpec(false, false, false);
+	  	SynonymType s_t = new SynonymType(idTok.getText(), this.symbolTable.getCurrentNamespace());
+	  	$enum_specifier::enumeration = new UserDefinedType(s_t, true, false);
+	  	s_t.setLineAndPos(line, pos);
+	  	s_t.setFileName(this.preproc.getCurrentFileName());
+		
+		try{
+			this.symbolTable.insertInnerSyn(name, s_t);
+		}
+		catch(SameNameAsParentClass sameName){
+			this.yield_error(sameName.getMessage(), true);
+			$enum_specifier::spec = null;
+			$enum_specifier::enumeration = null;
+			s_t = null;
+		}
+                catch(ConflictingDeclaration conflict){
+                	this.yield_error(conflict.getMessage(), true);
+                	this.yield_error(conflict.getFinalError(), false);
+                	$enum_specifier::spec = null;
+                	$enum_specifier::enumeration = null;
+                	s_t = null;
+                }
+                catch(Redefinition redef){
+                	this.yield_error(redef.getMessage(), true);
+                	this.yield_error(redef.getFinalError(), false);
+                	$enum_specifier::spec = null;
+                	$enum_specifier::enumeration = null;
+                	s_t = null;
+                }
+                catch(DiffrentSymbol diffSymbol){
+                	this.yield_error(diffSymbol.getMessage(), true);
+                	this.yield_error(diffSymbol.getFinalError(), false);
+                	$enum_specifier::spec = null;
+                	$enum_specifier::enumeration = null;
+                	s_t = null;
+                }
+
+                $Type_Spec::named_t = s_t;
+	  }
+	  '{' enumerator_list '}'
+	| t = 'enum' nested_name_id
+	  {
+	  
+	  	NamedType named_t = null;
+	  	try{
+	  		$Type_Spec::type[1] = true;
+	  		$Type_Spec::userDefinedCount++;
+	  		named_t = symbolTable.getNamedTypeFromNestedNameId($nested_name_id.names_chain, $nested_name_id.explicitGlobalScope, true, false);
+	  		if(named_t == null){
+	  			Token namTok = $nested_name_id.stop;
+	  			this.yield_error("error: use of enum '" + namTok.getText() + "' without previous declaration",
+	  					  this.fixLine(namTok),
+	  					  namTok.getCharPositionInLine());
+	  		}
+	  		else if(named_t instanceof CpmClass){
+	  			Token tag = $t;
+	  			this.yield_error("error: using '" + named_t.getTag() + " " + named_t.getFullName() + "' after 'enum' tag",
+	  					  this.fixLine(tag),
+	  					  tag.getCharPositionInLine());
+	  			$Type_Spec::named_t = null;
+	  		}
+	  		else{
+	  			$Type_Spec::named_t = named_t;
+	  		}
+	  		
+	  	}
+	  	catch(AccessSpecViolation access_viol){
+	  		yield_error(access_viol.getMessage(), false);
+	  		yield_error(access_viol.getContextError(), true);
+	  	}
+	  	catch(AmbiguousReference ambiguous){
+	  		if($nested_name_id.names_chain.size() == 1){
+	  			Token namTok = $nested_name_id.stop;
+	  			this.yield_error("error: use of enum '" + namTok.getText() + "' without previous declaration",
+	  					  this.fixLine(namTok),
+	  					  namTok.getCharPositionInLine());
+	  		}
+	  		else{
+		  		yield_error(ambiguous.getRefError(), true);
+		  		System.err.print(ambiguous.getMessage());
+		  		yield_error(ambiguous.getLastLine(), true);
+	  		}
+	  	}
+	  	catch(NotDeclared nodeclared){
+  			yield_error(nodeclared.getMessage(), true);
+	  	}
+	  	catch(InvalidScopeResolution invalid){
+	  		yield_error(invalid.getMessage(), true);
+	  	}
+	  	catch(DoesNotNameType _){
+	  		//not possible
+	  	}
+	  	
+	  	if($Type_Spec::named_t == null){
+	  		$Type_Spec::error_inUserDefined = true;
+	  	}
+	  }
 	;
 
 enumerator_list
-	: enumerator (',' enumerator)*
+	: 
+	{
+	   if(this.symbolTable.isCurrentNamespaceClass() == true){
+  		$enum_specifier::spec.isStatic = true;
+  	   }
+	}
+	enumerator (',' enumerator)*
 	;
 
 enumerator
-	: IDENTIFIER ('=' constant_expression)?
+	: IDENTIFIER
+	  {
+	  	if($enum_specifier::enumeration != null){
+		  	Token idTok = $IDENTIFIER;
+		  	String name = idTok.getText();
+		  	int line = this.fixLine(idTok);
+		  	int pos = idTok.getCharPositionInLine();
+		  	this.insertField(idTok.getText(), $enum_specifier::enumeration, line, pos, $enum_specifier::spec);
+	  	}
+	  }
+	  ('=' constant_expression)?
 	;
 
 type_qualifier
@@ -1966,6 +2286,7 @@ scope{
 @init{
 	$declarator::pointers = null;
 }
+
 	: { $declarator::pointers = new ArrayList<ptr_cv>(); } 
 	p = pointer[$declarator::pointers]? direct_declarator 
 					    { 
@@ -2122,7 +2443,7 @@ scope{
 	: {
 	   $parameter_type_list::p_list = new ParameterList();
 	   $parameter_type_list::error_in_parameters = false;
-	  } 
+	  }
 	  parameter_list (','? varargs = '...')? 
 	  {
 	    if($parameter_type_list::error_in_parameters == true) $params = null;
@@ -2246,8 +2567,68 @@ identifier_list
 	: IDENTIFIER (',' IDENTIFIER)*
 	;
 
-type_name
-	: specifier_qualifier_list abstract_declarator?
+type_name [String id] returns [Type tp]
+scope declarator_strings;
+scope decl_infered;
+@init{
+	$declarator_strings::dir_decl_identifier = $id;
+	$declarator_strings::dir_decl_error = null;
+	$decl_infered::declarator = null;
+	$tp = null;
+}
+	: specifier_qualifier_list
+	  {
+	  	if($specifier_qualifier_list.error != null)
+		  	$declarator_strings::dir_decl_error = $specifier_qualifier_list.error + $specifier_qualifier_list.init_decl_err;
+	  }
+	  abstract_declarator?
+	  {
+	  	if($abstract_declarator.tree == null) {
+	  		if($declarator_strings::dir_decl_error != null) {
+		  		Token last_t = $specifier_qualifier_list.stop;
+		  		int line = this.fixLine(last_t);
+		  		int pos = last_t.getCharPositionInLine();
+		  		this.yield_error($declarator_strings::dir_decl_error, line, pos);
+	  		}
+	  		else{
+	  			$tp =  $specifier_qualifier_list.t;
+	  		}
+	  	}
+	  	else {
+	  		Type dataType = $specifier_qualifier_list.t;
+	  		DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
+	  		if(dataType != null){
+			  	if(decl_inf_t == null) {
+			  		$tp = dataType;
+			  	}
+			  	else{
+			  		boolean err_inDeclarator = false;
+			  		if(decl_inf_t.p_pend != null){
+			  			decl_inf_t.p_pend.setPointsTo(dataType);
+			  		}
+			  		else if(decl_inf_t.m_pend != null){
+			  			decl_inf_t.m_pend.getSignature().setReturnValue(dataType);
+			  		}
+			  		else if(decl_inf_t.ar_pend != null){
+			  			decl_inf_t.ar_pend.setType(dataType);
+			  		}
+			  		else err_inDeclarator = true;
+			  		
+			  		if(err_inDeclarator == false){
+				  		if(decl_inf_t.p_rv != null){
+				  			$tp = decl_inf_t.p_rv;
+				  		}
+				  		else if(decl_inf_t.m_rv != null){
+				  			$tp = decl_inf_t.m_rv;
+				  		}
+				  		else if(decl_inf_t.ar_rv != null){
+				  			$tp = decl_inf_t.ar_rv;
+				  		}
+			  		}
+			  	}
+	  		}
+	  	}
+	  }
 	;
 
 abstract_declarator
@@ -2255,7 +2636,7 @@ scope{
 	ArrayList<ptr_cv> pointers;
 }
 @init{
-	$declarator_strings::dir_decl_identifier = "parameter";
+	if($declarator_strings::dir_decl_identifier == null) $declarator_strings::dir_decl_identifier = "parameter";
 }
 	: { 
 	    $abstract_declarator::pointers = new ArrayList<ptr_cv>();
@@ -2263,7 +2644,7 @@ scope{
 		Token next_tok = this.input.LT(1);
 		int line = this.fixLine(next_tok);
 		int pos = next_tok.getCharPositionInLine();
-		this.yield_error($declarator_strings::dir_decl_error + " 'parameter'", line, pos);
+		this.yield_error($declarator_strings::dir_decl_error + " '" + $declarator_strings::dir_decl_identifier + "'", line, pos);
 	     } 
 	  }
 	  pointer[$abstract_declarator::pointers]
@@ -2317,7 +2698,7 @@ multiplicative_expression
 	;
 
 cast_expression
-	: '(' type_name ')' cast_expression
+	: '(' type_name["type name"] ')' cast_expression
 	| unary_expression
 	;
 
@@ -2326,8 +2707,8 @@ unary_expression
 	| '++' unary_expression
 	| '--' unary_expression
 	| unary_operator cast_expression
+	| 'sizeof' '(' type_name["type name"] ')'
 	| 'sizeof' unary_expression
-	| 'sizeof' '(' type_name ')'
 	;
 
 postfix_expression
@@ -2507,17 +2888,24 @@ line_marker
 scope{
 	boolean is_enter;
 	boolean is_exit;
+	boolean is_stl_header;
 }
 @init{
 	$line_marker::is_enter = false;
 	$line_marker::is_exit = false;
+	$line_marker::is_stl_header = false;
 }
 	: h_tag = '#' DECIMAL_LITERAL STRING_LITERAL line_marker_flags? { String file = $STRING_LITERAL.text;
 									  file = file.substring(1, file.length() - 1);
 									  int baseLine = Integer.parseInt($DECIMAL_LITERAL.text);
 									  int preprocLine = $h_tag.line;
+
 									  //ignore preproc useless stuff 
 									  if(file.equals("<built-in>") == false && file.equals("<command-line>") == false){
+									  
+									  	  this.inStlFile = $line_marker::is_stl_header;
+									  	  this.stlFile = file;
+
 										  if($line_marker::is_enter == true){
 										  	this.preproc.enterIncludedFile(file, 
 										  				       baseLine,
@@ -2526,6 +2914,7 @@ scope{
 										  }
 										  else if($line_marker::is_exit == true){
 										  	this.preproc.exitIncludedFile(baseLine, preprocLine);
+										  	$line_marker::is_stl_header = false;
 										  }
 										  else{
 										  	this.preproc.enterIncludedFile(file,
@@ -2543,6 +2932,7 @@ line_marker_flags
 	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
 	  	if(flag == 1) $line_marker::is_enter = true;
 	  	else if(flag == 2) $line_marker::is_exit = true;
+	  	else if(flag == 3) $line_marker::is_stl_header = true;
 	  }
 	  line_marker_flags
 	| DECIMAL_LITERAL
@@ -2550,6 +2940,7 @@ line_marker_flags
 	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
 	  	if(flag == 1) $line_marker::is_enter = true;
 	  	else if(flag == 2) $line_marker::is_exit = true;
+	  	else if(flag == 3) $line_marker::is_stl_header = true;
 	  }
 	;
 

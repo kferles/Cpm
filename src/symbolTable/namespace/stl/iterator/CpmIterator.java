@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package symbolTable.namespace.stl.iterator;
 
 import symbolTable.namespace.CpmClass;
@@ -25,5 +21,12 @@ public class CpmIterator extends CpmClass{
         this.iter_to = iter_to;
         this.it_type = it_type;
         this.isConst = isConst;
+    }
+    
+    public CpmIterator(CpmIterator iter, Type iter_to){
+        super(iter);
+        this.iter_to = iter_to;
+        this.it_type = iter.it_type;
+        this.isConst = iter.isConst;
     }
 }

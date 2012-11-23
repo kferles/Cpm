@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package symbolTable.namespace;
 
 import errorHandling.BaseClassCVQual;
@@ -17,6 +13,10 @@ import symbolTable.types.UserDefinedType;
 public class SynonymType implements NamedType {
     
     String name;
+    
+    /* IMORTANT:
+     * Synonym Type is null inside the non-instantiated stl containers classes ...
+     */
     
     Type synonym;
     
@@ -93,7 +93,8 @@ public class SynonymType implements NamedType {
         else{
             String parent = this.belongsTo.getStringName(new StringBuilder()).toString();
             String t_name = " " + parent + (parent.equals("") ? "" : "::") + this.name;
-            return "typedef " + this.synonym.toString(t_name);
+            String rv = this.synonym != null ? "typedef " + this.synonym.toString(t_name) : t_name + this.name;
+            return rv;
         }
      }
     
@@ -124,7 +125,7 @@ public class SynonymType implements NamedType {
     @Override
     public CpmClass isClassName() throws BaseClassCVQual {
         CpmClass rv = null;
-        if(this.synonym instanceof UserDefinedType){
+        if(this.synonym != null && this.synonym instanceof UserDefinedType){
             UserDefinedType ut = (UserDefinedType)this.synonym;
             if((rv = ut.getNamedType().isClassName()) != null){
                 if (ut.isConst() == true || ut.isVolatile() == true){
@@ -142,7 +143,15 @@ public class SynonymType implements NamedType {
     
     @Override
     public boolean isComplete(CpmClass current) throws VoidDeclaration{
-        return this.synonym.isComplete(current);
+        /*
+         * template parameters and unknown types are complete until instantiation
+         */
+        return this.synonym != null ? this.synonym.isComplete(current) : true;
+    }
+    
+    @Override
+    public String getName(){
+        return this.name;
     }
     
 }
