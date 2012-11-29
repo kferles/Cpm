@@ -38,7 +38,7 @@ public class Namespace implements DefinesNamespace{
     
     protected HashMap<String, NamespaceElement<SynonymType>> innerSynonynms = null;
     
-    protected HashMap<String, NamedType> visibleTypeNames = null;
+    protected HashMap<String, TypeDefinition> visibleTypeNames = null;
     
     DefinesNamespace belongsTo;
     
@@ -46,7 +46,7 @@ public class Namespace implements DefinesNamespace{
     
     int line, pos;
     
-        protected class NamespaceElement <T>{
+        protected class NamespaceElement <T> implements MemberElementInfo<T> {
             
             T element;
             
@@ -59,6 +59,56 @@ public class Namespace implements DefinesNamespace{
                 this.fileName = fileName;
                 this.line = line;
                 this.pos = pos;
+            }
+            
+            @Override
+            public String getFileName(){
+                    return this.fileName;
+                }
+                
+            @Override
+            public int getLine(){
+                return this.line;
+            }
+
+            @Override
+            public int getPos(){
+                return this.pos;
+            }
+            
+            @Override
+            public T getElement(){
+                return this.element;
+            }
+            
+            @Override
+            public boolean equals(Object o){
+                if(o == null) return false;
+                if(! (o instanceof NamespaceElement)) return false;
+                
+                if(o != this){
+                    NamespaceElement<?> othElem = (NamespaceElement<?>) o;
+                    
+                    if(this.element.equals(othElem.element) == false) return false;
+                    
+                    if(this.fileName.equals(othElem.fileName) == false) return false;
+                    
+                    if(this.line != othElem.line) return false;
+                    
+                    if(this.pos != othElem.pos) return false;
+                }
+                
+                return true;
+            }
+
+            @Override
+            public int hashCode() {
+                int hash = 5;
+                hash = 59 * hash + (this.element != null ? this.element.hashCode() : 0);
+                hash = 59 * hash + (this.fileName != null ? this.fileName.hashCode() : 0);
+                hash = 59 * hash + this.line;
+                hash = 59 * hash + this.pos;
+                return hash;
             }
             
         }
@@ -82,7 +132,7 @@ public class Namespace implements DefinesNamespace{
         }
     }
     
-    private void checkForConflictsInDecl(String name, NamedType t, int line, int pos) throws ConflictingDeclaration{
+    private void checkForConflictsInDecl(String name, TypeDefinition t, int line, int pos) throws ConflictingDeclaration{
         if(this.allSymbols.containsKey(name) == true){
             NamespaceElement<? extends Type> old_entry = this.allSymbols.get(name);
             String id = this.getFieldsFullName(name);
@@ -106,7 +156,7 @@ public class Namespace implements DefinesNamespace{
         }
     }
     
-    private void checkForConflictsWithNamespaces(String name, NamedType t, int line, int pos) throws DiffrentSymbol{
+    private void checkForConflictsWithNamespaces(String name, TypeDefinition t, int line, int pos) throws DiffrentSymbol{
         if(this.innerNamespaces != null && this.innerNamespaces.containsKey(name) == true){
             NamespaceElement<Namespace> namespace = this.innerNamespaces.get(name);
             String id = this.getFieldsFullName(name);
@@ -116,7 +166,7 @@ public class Namespace implements DefinesNamespace{
     
     private void checkForChangingMeaningOfType(String name, Type new_entry, int line, int pos) throws ChangingMeaningOf {
         if(this.visibleTypeNames.containsKey(name) == true){
-            NamedType t = this.visibleTypeNames.get(name);
+            TypeDefinition t = this.visibleTypeNames.get(name);
             String id = this.getFieldsFullName(name);
             throw new ChangingMeaningOf(id, name, new_entry, t, line, pos);
         }
@@ -126,10 +176,10 @@ public class Namespace implements DefinesNamespace{
         this.name = name;
         this.belongsTo = belongsTo;
         if(this.belongsTo != null){
-            this.visibleTypeNames = new HashMap<String, NamedType>(this.belongsTo.getVisibleTypeNames());
+            this.visibleTypeNames = new HashMap<String, TypeDefinition>(this.belongsTo.getVisibleTypeNames());
         }
         else{
-            this.visibleTypeNames = new HashMap<String, NamedType>();
+            this.visibleTypeNames = new HashMap<String, TypeDefinition>();
         }
     }
     
@@ -332,8 +382,8 @@ public class Namespace implements DefinesNamespace{
     }
 
     @Override
-    public NamedType isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
-        NamedType rv = null;
+    public TypeDefinition isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
+        TypeDefinition rv = null;
         DefinesNamespace curr_namespace = this;
         while(curr_namespace != null){
             /*
@@ -347,8 +397,8 @@ public class Namespace implements DefinesNamespace{
     }
 
     @Override
-    public NamedType findNamedType(String name, DefinesNamespace _, boolean ignore_access) {
-        NamedType rv = null;
+    public TypeDefinition findNamedType(String name, DefinesNamespace _, boolean ignore_access) {
+        TypeDefinition rv = null;
         if(this.innerTypes != null && this.innerTypes.containsKey(name) == true){
             rv = this.innerTypes.get(name).element;
         }
@@ -381,7 +431,7 @@ public class Namespace implements DefinesNamespace{
     }
     
     @Override
-    public HashMap<String, NamedType> getVisibleTypeNames() {
+    public HashMap<String, TypeDefinition> getVisibleTypeNames() {
         return this.visibleTypeNames;
     }
     

@@ -2,7 +2,7 @@ package symbolTable.types;
 
 import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 import symbolTable.namespace.SynonymType;
 
 
@@ -108,7 +108,7 @@ public class PrimitiveType extends SimpleType {
     }
     
     @Override
-    public boolean isOverloadableWith(NamedType o, boolean isPointer){
+    public boolean isOverloadableWith(TypeDefinition o, boolean isPointer){
         if(o instanceof CpmClass){
             return true;
         }

@@ -45,7 +45,7 @@ scope Type_Spec{
 	PrimitiveTypeCheck counters;
 	
 	//user defined types
-	NamedType named_t;
+	TypeDefinition named_t;
 	int userDefinedCount;
 	boolean error_inUserDefined;
 	
@@ -341,7 +341,7 @@ import preprocessor.*;
 		return true;
 	}
 
-	private boolean check_tags(String requested, NamedType original, int line, int pos){
+	private boolean check_tags(String requested, TypeDefinition original, int line, int pos){
 		String tag = original.getTag();
 		boolean isUnion = requested.equals("union");
 		if(tag.equals("struct") == true || tag.equals("class") == true){
@@ -569,12 +569,12 @@ import preprocessor.*;
 	
 	//nested name id as type specifier aux methods and fields
 	
-	HashMap<ArrayList<SymbolTable.NestedNameInfo>, NamedType> successes = new HashMap<ArrayList<SymbolTable.NestedNameInfo>, NamedType>();
+	HashMap<ArrayList<SymbolTable.NestedNameInfo>, TypeDefinition> successes = new HashMap<ArrayList<SymbolTable.NestedNameInfo>, TypeDefinition>();
 	
 	HashSet<SymbolTable.NestedNameInfo> failures = new HashSet<SymbolTable.NestedNameInfo>();
 	
-	private NamedType getNamedType(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope, boolean isTemplate, List<List<Type>> tmplArgs){
-		NamedType rv;
+	private TypeDefinition getNamedType(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope, boolean isTemplate, List<List<Type>> tmplArgs){
+		TypeDefinition rv;
 		
 		if(isTemplate == true){
 			rv = this.symbolTable.instantiateTemplates(chain, explicitGlobalScope, tmplArgs);
@@ -591,7 +591,7 @@ import preprocessor.*;
 	}
 	
 	private boolean isValidNamedType(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope){
-		NamedType t = null;
+		TypeDefinition t = null;
 
 		/*if(chain.size() == 1 && chain.get(0).getName().equals("list") == true) {
 			System.out.println("Here");
@@ -665,7 +665,7 @@ import preprocessor.*;
 	private CpmClass isValidBaseClass(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope, char token) throws Exception, BaseClassCVQual{
 		CpmClass rv = null;
 		try{
-			NamedType named_t = symbolTable.getNamedTypeFromNestedNameId(chain, explicitGlobalScope, false, false);
+			TypeDefinition named_t = symbolTable.getNamedTypeFromNestedNameId(chain, explicitGlobalScope, false, false);
 			rv = named_t.isClassName();
 			if(rv == null){
 				throw new Exception("error: expected class-name before '" + token + "'");
@@ -1010,6 +1010,10 @@ import preprocessor.*;
 	//end insert into current scope
 
 	boolean normal_mode = true;
+	
+	//using directive aux methods 
+	
+	
 
 }
 
@@ -1121,9 +1125,23 @@ scope{
 	| (struct_union_or_class nested_name_id '{') => extern_class_definition ';'
 	|'typedef' { $declaration::isTypedef = true; } simple_declaration ';'
 	| simple_declaration ';'
+	| using_directive ';'
 	| line_marker
 	;
- 
+
+using_directive
+	: 'using' 'namespace' global_scope = '::'? IDENTIFIER 
+	{
+	  
+	}
+	using_directive_tail[ (Namespace) curr]?
+	;
+
+using_directive_tail [Namespace currentNamespace]
+	: '::' IDENTIFIER using_directive_tail
+	| '::' IDENTIFIER
+	;
+
 simple_declaration
 scope{
 	boolean possible_fwd_decl;
@@ -1497,7 +1515,7 @@ type_specifier
 	  }
 	  {unsigned_count_error() == true}?
 	| struct_union_or_class_specifier
-	| nested_name_id 
+	| nested_name_id
 	  { $Type_Spec::type[1] = true;
 	    $Type_Spec::userDefinedCount++;
 
@@ -1606,7 +1624,7 @@ template_argument
 struct_union_or_class_specifier
 	: struct_union_or_class nested_name_id
 	  {
-	  	NamedType named_t = null;
+	  	TypeDefinition named_t = null;
 	  	try{
 	  		$Type_Spec::type[1] = true;
 	  		$Type_Spec::userDefinedCount++;
@@ -1778,7 +1796,7 @@ scope normal_mode_fail_level;
 	  }
 	  (':' { $collect_base_classes::superClasses = new ArrayList<CpmClass>(); } base_classes = base_class_list)?
 	  {
-	  	NamedType t = null;
+	  	TypeDefinition t = null;
 	  	ArrayList<SymbolTable.NestedNameInfo> chain = $nested_name_id.names_chain;
 	  	boolean explicitGlobalScope = $nested_name_id.explicitGlobalScope;
 	  	int line = this.fixLine($nested_name_id.start);
@@ -2186,7 +2204,7 @@ scope{
 	| t = 'enum' nested_name_id
 	  {
 	  
-	  	NamedType named_t = null;
+	  	TypeDefinition named_t = null;
 	  	try{
 	  		$Type_Spec::type[1] = true;
 	  		$Type_Spec::userDefinedCount++;

@@ -3,7 +3,7 @@ package symbolTable.types;
 import errorHandling.AmbiguousBaseClass;
 import java.util.ArrayList;
 import symbolTable.namespace.CpmClass;
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 import symbolTable.namespace.SynonymType;
 
 /**
@@ -190,7 +190,7 @@ public class Pointer extends Type{
     }
     
     @Override
-    public boolean isOverloadableWith(NamedType nt, boolean _){
+    public boolean isOverloadableWith(TypeDefinition nt, boolean _){
         if(nt instanceof SynonymType){
             SynonymType s_t = (SynonymType)nt;
             if(s_t.getTag().equals("typedef") == true){

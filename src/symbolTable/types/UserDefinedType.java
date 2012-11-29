@@ -3,7 +3,7 @@ package symbolTable.types;
 import errorHandling.AmbiguousBaseClass;
 import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 import symbolTable.namespace.SynonymType;
 
 /**
@@ -12,9 +12,9 @@ import symbolTable.namespace.SynonymType;
  */
 public class UserDefinedType extends SimpleType{
 
-    NamedType type;
+    TypeDefinition type;
     
-    public UserDefinedType(NamedType type, boolean isConst, boolean isVolatile) {
+    public UserDefinedType(TypeDefinition type, boolean isConst, boolean isVolatile) {
         super(type.getFullName());
         this.type = type;
         this.isConst = isConst;
@@ -90,7 +90,7 @@ public class UserDefinedType extends SimpleType{
         }
     }
     
-    public NamedType getNamedType(){
+    public TypeDefinition getNamedType(){
         return this.type;
     }
     
@@ -111,7 +111,7 @@ public class UserDefinedType extends SimpleType{
     }
     
     @Override
-    public boolean isOverloadableWith(NamedType o, boolean isPointer){
+    public boolean isOverloadableWith(TypeDefinition o, boolean isPointer){
         if(this.type instanceof CpmClass){
             CpmClass _class = (CpmClass)this.type;
             if(o instanceof CpmClass){

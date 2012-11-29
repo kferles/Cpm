@@ -4,7 +4,7 @@
  */
 package errorHandling;
 
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 
 /**
  *
@@ -12,7 +12,7 @@ import symbolTable.namespace.NamedType;
  */
 public class SameNameAsParentClass extends ErrorMessage{
     
-    public SameNameAsParentClass(NamedType t){
+    public SameNameAsParentClass(TypeDefinition t){
         super("line " + t.getLine() + ":" + t.getPosition() + " error: '" + t.toString() + "' has the same name as the class in which it is declared");
     }
     

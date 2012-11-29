@@ -3,7 +3,7 @@ package symbolTable.types;
 import errorHandling.AmbiguousBaseClass;
 import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 
 /**
  * Abstract class representing a Type in C+- language.
@@ -34,7 +34,7 @@ public abstract class Type {
     
     public abstract boolean isOverloadableWith(Type o, boolean isPointer);
     
-    public abstract boolean isOverloadableWith(NamedType o, boolean isPointer);
+    public abstract boolean isOverloadableWith(TypeDefinition o, boolean isPointer);
     
     public abstract int overloadHashCode(boolean isPointer);
 

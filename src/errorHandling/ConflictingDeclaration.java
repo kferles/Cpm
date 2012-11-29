@@ -4,7 +4,7 @@
  */
 package errorHandling;
 
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 import symbolTable.types.Type;
 
 /**
@@ -21,7 +21,7 @@ public class ConflictingDeclaration extends ErrorMessage{
         this.final_err = oldsFileName + " line " + old_line + ":" + old_pos + " error: conflicts with previous declaration '" + old_entry.toString(name) + "'";
     }
     
-    public ConflictingDeclaration(String name, NamedType new_entry, Type old_entry, int new_line, int new_pos, String oldsFileName, int old_line, int old_pos){
+    public ConflictingDeclaration(String name, TypeDefinition new_entry, Type old_entry, int new_line, int new_pos, String oldsFileName, int old_line, int old_pos){
         super("line " + new_line + ":" + new_pos + " error: declaration of: '" + new_entry + "'");
         this.final_err = oldsFileName + " line " + old_line + ":" + old_pos + " error: conflicts with previous declaration '" + old_entry.toString(name) + "'";
     }

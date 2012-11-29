@@ -10,7 +10,7 @@ import symbolTable.types.UserDefinedType;
  *
  * @author kostas
  */
-public class SynonymType implements NamedType {
+public class SynonymType implements TypeDefinition {
     
     String name;
     
@@ -99,7 +99,7 @@ public class SynonymType implements NamedType {
      }
     
     /*
-     * NamedType interface methods
+     * TypeDefinition interface methods
      */
     @Override
     public int getLine() {

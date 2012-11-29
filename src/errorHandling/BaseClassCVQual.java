@@ -4,7 +4,7 @@
  */
 package errorHandling;
 
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 
 /**
  *
@@ -12,7 +12,7 @@ import symbolTable.namespace.NamedType;
  */
 public class BaseClassCVQual extends ErrorMessage{
     
-    public BaseClassCVQual(NamedType t){
+    public BaseClassCVQual(TypeDefinition t){
         super("error: base class '" + t.toString() +"' has cv qualifiers");
     }
     

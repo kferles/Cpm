@@ -135,7 +135,7 @@ public class SymbolTable extends Namespace{
     
     public SymbolTable(){
         super("", null);
-        super.visibleTypeNames = new HashMap<String, NamedType>();
+        super.visibleTypeNames = new HashMap<String, TypeDefinition>();
         super.innerNamespaces = new HashMap<String, NamespaceElement<Namespace>>();
         super.innerNamespaces.put("std", new NamespaceElement<Namespace>(new Namespace("std", this), null, -1, -1));
     }
@@ -283,8 +283,8 @@ public class SymbolTable extends Namespace{
         return this.type == ScopeType.Class;
     }
     
-    public NamedType instantiateTemplates(ArrayList<NestedNameInfo> chain, boolean explicitGlobalScope, List<List<Type>> templateArgs){
-        NamedType rv = null;
+    public TypeDefinition instantiateTemplates(ArrayList<NestedNameInfo> chain, boolean explicitGlobalScope, List<List<Type>> templateArgs){
+        TypeDefinition rv = null;
 
         DefinesNamespace curr = this.getCurrentNamespace();
 
@@ -299,7 +299,7 @@ public class SymbolTable extends Namespace{
             if(chain.size() == 1) {
                 inf = chain.get(0);
                 t_name = inf.getName();
-                NamedType t;
+                TypeDefinition t;
                 if(explicitGlobalScope == true) {
                     t = super.findNamedType(t_name, curr, false);
                 }
@@ -364,13 +364,13 @@ public class SymbolTable extends Namespace{
  
     }
     
-    public NamedType getNamedTypeFromNestedNameId(ArrayList<NestedNameInfo> chain, boolean explicitGlobalScope, boolean allowNull, boolean ignore_access) 
+    public TypeDefinition getNamedTypeFromNestedNameId(ArrayList<NestedNameInfo> chain, boolean explicitGlobalScope, boolean allowNull, boolean ignore_access) 
                                                                                                         throws AccessSpecViolation, 
                                                                                                                AmbiguousReference,
                                                                                                                NotDeclared,
                                                                                                                InvalidScopeResolution,
                                                                                                                DoesNotNameType {
-        NamedType rv = null;
+        TypeDefinition rv = null;
         DefinesNamespace curr = this.getCurrentNamespace();
         NestedNameInfo tmp;
         int line, pos;

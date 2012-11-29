@@ -4,7 +4,7 @@ import errorHandling.AmbiguousBaseClass;
 import java.util.ArrayList;
 import symbolTable.namespace.CpmClass;
 import symbolTable.namespace.DefinesNamespace;
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 import symbolTable.namespace.SynonymType;
 
 /**
@@ -284,7 +284,7 @@ public class Method extends Type{
     }
     
     @Override
-    public boolean isOverloadableWith(NamedType o, boolean isPOinter){
+    public boolean isOverloadableWith(TypeDefinition o, boolean isPOinter){
         if(o instanceof SynonymType){
             SynonymType s_t = (SynonymType)o;
             if(s_t.getTag().equals("typedef") == true){

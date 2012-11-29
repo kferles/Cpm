@@ -1,17 +1,9 @@
 package symbolTable.namespace;
 
 import errorHandling.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import symbolTable.types.Method;
 import symbolTable.types.Type;
-
-/*
- * note: line and pos to classes and namespaces (inside the classContent element)
- * are a bit useless for now (but keep them for any case)
- */
 
 /*
  * TODO: print static for fields in error messages throug print field method ... May also need to change the exceptions
@@ -22,7 +14,7 @@ import symbolTable.types.Type;
  *
  * @author kostas
  */
-public class CpmClass implements DefinesNamespace, NamedType{
+public class CpmClass implements DefinesNamespace, TypeDefinition{
     
     protected String name;
     
@@ -47,7 +39,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
     
     protected ClassContentElement<Method> destructor = null;
     
-    protected HashMap<String, NamedType> visibleTypeNames = null;
+    protected HashMap<String, TypeDefinition> visibleTypeNames = null;
     
     protected DefinesNamespace belongsTo;
     
@@ -67,7 +59,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
     
     protected boolean isComplete;
 
-            protected class ClassContentElement <T>{
+            protected class ClassContentElement <T> implements MemberElementInfo<T> {
                 T element;
 
                 AccessSpecifier access;
@@ -104,6 +96,26 @@ public class CpmClass implements DefinesNamespace, NamedType{
                     this.line = elem.line;
                     this.pos = elem.pos;
                 }
+                
+                @Override
+                public String getFileName(){
+                    return this.fileName;
+                }
+                
+                @Override
+                public int getLine(){
+                    return this.line;
+                }
+                
+                @Override
+                public int getPos(){
+                    return this.pos;
+                }
+                
+                @Override
+                public T getElement(){
+                    return this.element;
+                }
 
                 @Override
                 public boolean equals(Object o){
@@ -111,17 +123,29 @@ public class CpmClass implements DefinesNamespace, NamedType{
                     if(o == this) return true;
                     if(!(o instanceof ClassContentElement)) return false;
                     
-                    return this.element.equals(((ClassContentElement<?>)o).element);
+                    ClassContentElement<?> othElem = ((ClassContentElement<?>)o);
+                    if(this.element.equals(othElem.element) == false) return false;
+                    if(this.access != othElem.access) return false;
+                    if(this.isStatic != othElem.isStatic) return false;
+                    if(this.fileName.equals(othElem.fileName) == false) return false;
+                    if(this.line != othElem.line) return false;
+                    if(this.pos != othElem.pos) return false;
+                    
+                    return true;
                 }
 
                 @Override
                 public int hashCode() {
-                    return this.element.hashCode();
+                    int hash = 5;
+                    hash = 29 * hash + (this.element != null ? this.element.hashCode() : 0);
+                    hash = 29 * hash + (this.access != null ? this.access.hashCode() : 0);
+                    hash = 29 * hash + (this.isStatic ? 1 : 0);
+                    hash = 29 * hash + (this.fileName != null ? this.fileName.hashCode() : 0);
+                    hash = 29 * hash + this.line;
+                    hash = 29 * hash + this.pos;
+                    return hash;
                 }
-                
-                public T getElement(){
-                    return this.element;
-                }
+
             }
 
     private boolean isOverrider(String name, Method m) throws ConflictingRVforVirtual,
@@ -190,7 +214,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
         }
     }
     
-    private void checkForConflictsInDecl(String name, NamedType t, int line, int pos) throws ConflictingDeclaration{
+    private void checkForConflictsInDecl(String name, TypeDefinition t, int line, int pos) throws ConflictingDeclaration{
         if(this.allSymbols.containsKey(name) == true){
             ClassContentElement<? extends Type> old_entry = this.allSymbols.get(name);
             String id = this.getFieldsFullName(name);
@@ -200,7 +224,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
     
     private void checkForChangingMeaningOfType(String name, Type new_entry, int line, int pos) throws ChangingMeaningOf {
         if(this.visibleTypeNames.containsKey(name) == true){
-            NamedType t = this.visibleTypeNames.get(name);
+            TypeDefinition t = this.visibleTypeNames.get(name);
             String id = this.getFieldsFullName(name);
             throw new ChangingMeaningOf(id, name, new_entry, t, line, pos);
         }
@@ -252,66 +276,96 @@ public class CpmClass implements DefinesNamespace, NamedType{
         return error;
     }
     
-    private ArrayList<NamedType> findAllCandidatesTypes(String name,
-                                                         DefinesNamespace from_scope, 
-                                                         HashSet<CpmClass> visited, 
-                                                         ArrayList<NamedType> agr,
-                                                         CpmClass first_class,
-                                                         ArrayList<String> compl_errors){
-        if(visited.contains(this) == true) return agr;
+    private String buildAccessErrorMsg(String fileName, int line, int pos, String id, String access_err){
+        return fileName + " line " + line + ":" + " error: '" + id + "' " + access_err;
+    }
+    
+    private void findAllCandidates(String name,
+                                   DefinesNamespace from_scope, 
+                                   HashSet<CpmClass> visited, 
+                                   List<TypeDefinition> typeAgr,
+                                   List<ClassContentElement<? extends Type>> fieldArg,
+                                   CpmClass first_class,
+                                   Map<TypeDefinition, String> typeAccessErrors,
+                                   Map<ClassContentElement<? extends Type>, String> fieldsAccessErrors) {
+
+        if(visited.contains(this) == true) return;
         visited.add(this);
         if(this.innerTypes != null && this.innerTypes.containsKey(name) == true){
             ClassContentElement<CpmClass> _class = this.innerTypes.get(name);
             String access_err = resolve_access(_class.access, from_scope);
             if(access_err != null){
-                access_err = _class.fileName + " line " + _class.element.line + ":" + _class.element.pos + " error: '" + _class.element.toString() + "' " + access_err;
-                compl_errors.add(access_err);
+                access_err = this.buildAccessErrorMsg(_class.fileName, _class.element.line, _class.element.pos, _class.element.toString(), access_err);
+                typeAccessErrors.put(_class.element, access_err);
             }
-            agr.add(_class.element);
+            typeAgr.add(_class.element);
         }
         else if(this.innerSynonyms != null && this.innerSynonyms.containsKey(name) == true){
             ClassContentElement<SynonymType> syn_t = this.innerSynonyms.get(name);
             String access_err = resolve_access(syn_t.access, from_scope);
             if(access_err != null){
-                access_err = syn_t.fileName + " line " + syn_t.element.line + ":" + syn_t.element.pos + " error: '" + syn_t.element.toString() + "' " + access_err;
-                compl_errors.add(access_err);
+                access_err = this.buildAccessErrorMsg(syn_t.fileName, syn_t.element.line, syn_t.element.pos, syn_t.element.toString(), access_err);
+                typeAccessErrors.put(syn_t.element, access_err);
             }
-            agr.add(syn_t.element);
+            typeAgr.add(syn_t.element);
         }
+        else if(this.fields != null && this.fields.containsKey(name) == true){
+            ClassContentElement<Type> fld = this.fields.get(name);
+            String access_err = resolve_access(fld.access, from_scope);
+            if(access_err != null){
+                access_err = this.buildAccessErrorMsg(fld.fileName, fld.line, fld.pos, fld.element.toString(name), access_err);
+                fieldsAccessErrors.put(fld, access_err);
+            }
+            fieldArg.add(fld);
+        }
+        else if(this.methods != null && this.methods.containsKey(name) == true){
+            HashMap<Method.Signature, ClassContentElement<Method>> meths = this.methods.get(name);
+            
+            for(ClassContentElement<Method> methElem : meths.values()){
+
+                String access_err = resolve_access(methElem.access, from_scope);
+
+                if(access_err != null){
+                    access_err = this.buildAccessErrorMsg(methElem.fileName, methElem.line, methElem.pos, methElem.element.toString(name), access_err);
+                    fieldsAccessErrors.put(methElem, access_err);
+                }
+
+                fieldArg.add(methElem);
+
+            }
+        }
+        /*
+         * Constructors & Destructors
+         */
         
         /*
          * in this case the inner type shadows all possible
          * candidates in super classes.
          */
-        if(agr.isEmpty() == false && this == first_class) return agr;
+        if((typeAgr.isEmpty() == false || fieldArg.isEmpty() == false) && this == first_class) return;
         
         if(this.superClasses != null){
             for(CpmClass _super: this.superClasses){
-                if(_super.name.equals(name) == true) agr.add(_super);
-                agr = _super.findAllCandidatesTypes(name, from_scope, visited, agr, first_class, compl_errors);
+                if(_super.name.equals(name) == true) typeAgr.add(_super);
+                _super.findAllCandidates(name, from_scope, visited, typeAgr, fieldArg, first_class, typeAccessErrors, fieldsAccessErrors);
             }
         }
-        return agr;
+
     }
     
     private void addSelfToVisible(){
         this.visibleTypeNames.put(this.name, this);
     }
     
-    
-    public static CpmClass instantiateStlContainer(String template_name, List<Type> template_arguments){
-        
-        
-        return null;
-    }
-    
     public void visibleTypesThroughSuperClasses(ArrayList<CpmClass> superTypes){
         HashSet<String> removed = new HashSet<String>();
-        if(this.visibleTypeNames == null) this.visibleTypeNames = new HashMap<String, NamedType>();
+        if(this.visibleTypeNames == null) this.visibleTypeNames = new HashMap<String, TypeDefinition>();
         if(this.superClasses == null) this.superClasses = new HashSet<CpmClass>();
         for(CpmClass _class : superTypes){
             this.superClasses.add(_class);
-            HashMap<String, NamedType> visible_tnames = _class.getVisibleTypeNames();
+            HashMap<String, TypeDefinition> visible_tnames = _class.getVisibleTypeNames();
+            HashMap<String, ClassContentElement<? extends Type>> visibleSymbols = _class.allSymbols;
+            
             for(String t_name : visible_tnames.keySet()){
                 if(removed.contains(t_name) == false){
                     if(this.visibleTypeNames.containsKey(t_name) == false){
@@ -323,8 +377,14 @@ public class CpmClass implements DefinesNamespace, NamedType{
                     }
                 }
             }
+
+            for(String symbolName : visibleSymbols.keySet()){
+                if(this.visibleTypeNames.containsKey(symbolName) == true){
+                    this.visibleTypeNames.remove(symbolName);
+                }
+            }
         }
-        HashMap<String, NamedType> parent_vis = this.belongsTo.getVisibleTypeNames();
+        HashMap<String, TypeDefinition> parent_vis = this.belongsTo.getVisibleTypeNames();
         for(String t_name : parent_vis.keySet()){
             if(removed.contains(t_name) == false){
                 if(this.visibleTypeNames.containsKey(t_name) == false){
@@ -352,7 +412,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
         this.isComplete = isComplete;
         this.belongsTo = belongsTo;
         this.struct_union_or_class = struct_union_or_class;
-        this.visibleTypeNames = new HashMap<String, NamedType>(this.belongsTo.getVisibleTypeNames());
+        this.visibleTypeNames = new HashMap<String, TypeDefinition>(this.belongsTo.getVisibleTypeNames());
         this.access = access;
         this.addSelfToVisible();
     }
@@ -362,7 +422,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
         this.isComplete = cpmClass.isComplete;
         this.belongsTo = cpmClass.belongsTo;
         this.struct_union_or_class = cpmClass.struct_union_or_class;
-        this.visibleTypeNames = new HashMap<String, NamedType>(cpmClass.visibleTypeNames);
+        this.visibleTypeNames = new HashMap<String, TypeDefinition>(cpmClass.visibleTypeNames);
         this.access = cpmClass.access;
         this.allSymbols = new HashMap<String, ClassContentElement<? extends Type>> (cpmClass.allSymbols);
     
@@ -385,7 +445,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
      * @param superTypes    All the super classes.
      * @param belongsTo     The namespace that the type belongs to (either a class or a namespace).
      */
-    public CpmClass(String struct_union_or_class, String name, DefinesNamespace belongsTo, ArrayList<CpmClass> superTypes, AccessSpecifier access){
+    public CpmClass(String struct_union_or_class, String name, DefinesNamespace belongsTo, List<CpmClass> superTypes, AccessSpecifier access){
         this.name = name;
         this.struct_union_or_class = struct_union_or_class;
         superClasses = new HashSet<CpmClass>();
@@ -394,9 +454,11 @@ public class CpmClass implements DefinesNamespace, NamedType{
         this.isComplete = true;
         this.belongsTo = belongsTo;
         HashSet<String> removed = new HashSet<String>();
-        this.visibleTypeNames = new HashMap<String, NamedType>();
+        this.visibleTypeNames = new HashMap<String, TypeDefinition>();
         for(CpmClass _class : superTypes){
-            HashMap<String, NamedType> visible_tnames = _class.getVisibleTypeNames();
+            HashMap<String, TypeDefinition> visible_tnames = _class.getVisibleTypeNames();
+            HashMap<String, ClassContentElement<? extends Type>> visibleSymbols = _class.allSymbols;
+            
             for(String t_name : visible_tnames.keySet()){
                 if(removed.contains(t_name) == false){
                     if(this.visibleTypeNames.containsKey(t_name) == false){
@@ -408,8 +470,18 @@ public class CpmClass implements DefinesNamespace, NamedType{
                     }
                 }
             }
+            
+            
+            
+            for(String symbolName : visibleSymbols.keySet()){
+                if(removed.contains(symbolName) == false){
+                    if(this.visibleTypeNames.containsKey(symbolName) == true){
+                        this.visibleTypeNames.remove(symbolName);
+                    }
+                }
+            }
         }
-        HashMap<String, NamedType> parent_vis = this.belongsTo.getVisibleTypeNames();
+        HashMap<String, TypeDefinition> parent_vis = this.belongsTo.getVisibleTypeNames();
         for(String t_name : parent_vis.keySet()){
             if(removed.contains(t_name) == false){
                 if(this.visibleTypeNames.containsKey(t_name) == false){
@@ -695,8 +767,8 @@ public class CpmClass implements DefinesNamespace, NamedType{
     }
     
     @Override
-    public NamedType isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
-        NamedType rv = null;
+    public TypeDefinition isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
+        TypeDefinition rv = null;
         DefinesNamespace curr_namespace = this;
         while(curr_namespace != null){
             rv = curr_namespace.findNamedType(name, this, ignore_access);
@@ -707,31 +779,43 @@ public class CpmClass implements DefinesNamespace, NamedType{
     }
 
     @Override
-    public NamedType findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, 
-                                                                                                           AmbiguousReference{
-        NamedType rv = null;
-        int res_size;
-        ArrayList<String> compl_errors = new ArrayList<String>();
-        ArrayList<NamedType> candidatesTypes = findAllCandidatesTypes(name,
-                                                                         from_scope,
-                                                                         new HashSet<CpmClass>(),
-                                                                         new ArrayList<NamedType>(),
-                                                                         this,
-                                                                         compl_errors);
-        if((res_size = candidatesTypes.size()) > 1){
-            //here class is ambiguous
-            throw new AmbiguousReference(candidatesTypes, name);
+    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, 
+                                                                                                                AmbiguousReference{
+        TypeDefinition rv = null;
+        int typeResSize, fldResSize;
+        Map<TypeDefinition, String> typeDefsErrors = new HashMap<TypeDefinition, String>();
+        Map<ClassContentElement<? extends Type>, String> fieldErrors = new HashMap<ClassContentElement<? extends Type>, String>();
+        List<TypeDefinition> candidatesTypes = new ArrayList<TypeDefinition>();
+        List<ClassContentElement<? extends Type>> candidateFields = new ArrayList<ClassContentElement<? extends Type>>();
+
+        this.findAllCandidates(name,
+                               from_scope,
+                               new HashSet<CpmClass>(),
+                               candidatesTypes,
+                               candidateFields,
+                               this,
+                               typeDefsErrors,
+                               fieldErrors);
+
+        typeResSize = candidatesTypes.size();
+        fldResSize = candidateFields.size();
+
+
+        if(typeResSize + fldResSize > 1){
+            throw new AmbiguousReference(candidatesTypes, candidateFields, name);
         }
-        else if(res_size == 1){
-            //check for access_spec errors
-            if(compl_errors.isEmpty() == false && ignore_access == false){
-                /*
-                 * access_specs_violation
-                 */
-                throw new AccessSpecViolation(compl_errors.get(0));
+        else{
+            
+            if(typeResSize == 1){
+                rv = candidatesTypes.get(0);
+                
+                if(typeDefsErrors.containsKey(rv) == true){
+                    throw new AccessSpecViolation(typeDefsErrors.get(rv));
+                }
             }
-            rv = candidatesTypes.get(0);
+
         }
+
         return rv;
     }
     
@@ -739,7 +823,7 @@ public class CpmClass implements DefinesNamespace, NamedType{
     public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation,
                                                                                                                   AmbiguousReference,
                                                                                                                   InvalidScopeResolution{
-        NamedType n_type = this.findNamedType(name, from_scope, ignore_access);
+        TypeDefinition n_type = this.findNamedType(name, from_scope, ignore_access);
         DefinesNamespace rv = isNameSpace(n_type);
 
         if(rv == null && this.belongsTo != null){
@@ -756,11 +840,11 @@ public class CpmClass implements DefinesNamespace, NamedType{
     }
     
     @Override
-    public HashMap<String, NamedType> getVisibleTypeNames() {
+    public HashMap<String, TypeDefinition> getVisibleTypeNames() {
         return this.visibleTypeNames;
     }
     
-    private DefinesNamespace isNameSpace(NamedType n_type) throws InvalidScopeResolution {
+    private DefinesNamespace isNameSpace(TypeDefinition n_type) throws InvalidScopeResolution {
         DefinesNamespace rv = null;
         if(n_type != null){
             if(n_type instanceof DefinesNamespace){

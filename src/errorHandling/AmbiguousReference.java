@@ -5,8 +5,11 @@
 package errorHandling;
 
 import java.util.ArrayList;
+import java.util.List;
 import symbolTable.namespace.DefinesNamespace;
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.MemberElementInfo;
+import symbolTable.namespace.TypeDefinition;
+import symbolTable.types.Type;
 
 /**
  *
@@ -14,7 +17,7 @@ import symbolTable.namespace.NamedType;
  */
 public class AmbiguousReference extends ErrorMessage {
     
-    private ArrayList<String> lines_errors = new ArrayList<String>();
+    private List<String> lines_errors = new ArrayList<String>();
     
     private String referenced_type;
     
@@ -26,16 +29,33 @@ public class AmbiguousReference extends ErrorMessage {
     
     boolean isPending = false;
     
-    public AmbiguousReference(ArrayList<NamedType> candidates, String referenced_type){
+    public AmbiguousReference(List<TypeDefinition> candidatesTypes, List<? extends MemberElementInfo<? extends Type>> candidateFields, String referenced_name){
         super("");
-        this.referenced_type = referenced_type;
-        NamedType firstClass = candidates.get(0);
-        lines_errors.add(firstClass.getFileName() + " line " + firstClass.getLine() + ":" + firstClass.getPosition()
-                                + " error: candidates are: " + firstClass.toString() + "\n");
-        for(int i = 1 ; i < candidates.size() ; ++i){
-            NamedType _class = candidates.get(i);
-            lines_errors.add(_class.getFileName() + " line " + _class.getLine() + ":" + _class.getPosition()
-                                                  + " error:                 " + _class.toString() + "\n");
+        this.referenced_type = referenced_name;
+        boolean typesEmpty;
+        
+        
+        if((typesEmpty = candidatesTypes.isEmpty()) == false){
+            TypeDefinition firstClass = candidatesTypes.get(0);
+            lines_errors.add(firstClass.getFileName() + " line " + firstClass.getLine() + ":" + firstClass.getPosition()
+                                    + " error: candidates are: " + firstClass.toString() + "\n");
+            for(int i = 1 ; i < candidatesTypes.size() ; ++i){
+                TypeDefinition _class = candidatesTypes.get(i);
+                lines_errors.add(_class.getFileName() + " line " + _class.getLine() + ":" + _class.getPosition()
+                                                    + " error:                 " + _class.toString() + "\n");
+            }
+        }
+        
+        if(typesEmpty){
+            MemberElementInfo<? extends Type> firstField = candidateFields.get(0);
+            this.lines_errors.add(firstField.getFileName() + " line " + firstField.getLine() + ":" + firstField.getPos()
+                                  + " error: candidates are: " + firstField.getElement().toString(referenced_name) + "\n");
+        }
+
+        for(int i = typesEmpty == true ? 1 : 0 ; i < candidateFields.size() ; ++i){
+            MemberElementInfo<? extends Type> memberInf = candidateFields.get(i);
+            lines_errors.add(memberInf.getFileName() + " line " + memberInf.getLine() + ":" + memberInf.getPos()
+                             + " error:                 " + memberInf.getElement().toString(referenced_name) + "\n");
         }
     }
     

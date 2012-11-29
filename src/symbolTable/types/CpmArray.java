@@ -7,7 +7,7 @@ package symbolTable.types;
 import errorHandling.AmbiguousBaseClass;
 import errorHandling.VoidDeclaration;
 import symbolTable.namespace.CpmClass;
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 import symbolTable.namespace.SynonymType;
 
 /**
@@ -105,7 +105,7 @@ public class CpmArray extends Type {
     }
 
     @Override
-    public boolean isOverloadableWith(NamedType o, boolean isPointer) {
+    public boolean isOverloadableWith(TypeDefinition o, boolean isPointer) {
         if(o instanceof SynonymType){
             SynonymType s_t = (SynonymType)o;
             if(s_t.getTag().equals("typedef") == true){

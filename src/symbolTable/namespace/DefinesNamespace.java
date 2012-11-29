@@ -14,7 +14,7 @@ public interface DefinesNamespace {
     
     public StringBuilder getStringName(StringBuilder in);
     
-    public HashMap<String, NamedType> getVisibleTypeNames();
+    public HashMap<String, TypeDefinition> getVisibleTypeNames();
     
     public DefinesNamespace getParentNamespace();
     
@@ -22,9 +22,9 @@ public interface DefinesNamespace {
     
     public String getName();
     
-    public NamedType isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
+    public TypeDefinition isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
     
-    public NamedType findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
+    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
     
     public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference, InvalidScopeResolution;
     

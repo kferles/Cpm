@@ -4,7 +4,7 @@
  */
 package errorHandling;
 
-import symbolTable.namespace.NamedType;
+import symbolTable.namespace.TypeDefinition;
 import symbolTable.types.Type;
 
 /**
@@ -15,7 +15,7 @@ public class ChangingMeaningOf extends ErrorMessage {
     
     private String final_err = null;
     
-    public ChangingMeaningOf(String id, String name, Type field, NamedType type, int line, int pos){
+    public ChangingMeaningOf(String id, String name, Type field, TypeDefinition type, int line, int pos){
         super("line " + line + ":" + pos + " error: declaration of '" + field.toString(id) + '\'');
         final_err = type.getFileName() + " line " + type.getLine() + ":" + type.getPosition() + " error: changes meaning of '" + name + "' from '" + type + '\'';
     }
