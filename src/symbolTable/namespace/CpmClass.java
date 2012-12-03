@@ -802,7 +802,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
 
 
         if(typeResSize + fldResSize > 1){
-            throw new AmbiguousReference(candidatesTypes, candidateFields, name);
+            throw new AmbiguousReference(candidatesTypes, null, candidateFields, name);
         }
         else{
             

@@ -1067,7 +1067,11 @@ scope normal_mode_fail_level;
 	  		$normal_mode_fail_level::failed = true;
 	  	}
 	  }
-	  '{' external_declaration*  '}' turn_on_normal_mode
+	  '{' external_declaration*  '}'
+	  {
+  	  	this.symbolTable.endScope();
+  	  }
+	   turn_on_normal_mode
 	;
 	
 extern_method_definition
@@ -1130,16 +1134,123 @@ scope{
 	;
 
 using_directive
-	: 'using' 'namespace' global_scope = '::'? IDENTIFIER 
+scope{
+	Namespace currUsing;
+	DefinesNamespace currentScope;
+	Namespace finalNamespace;
+}
+@init{
+	$using_directive::finalNamespace = null;
+}
+	: us = 'using' 'namespace' global_scope = '::'? IDENTIFIER 
 	{
-	  
+	   DefinesNamespace curr = null;
+	   String id = $IDENTIFIER.text;
+	   DefinesNamespace currentScope = this.symbolTable.getCurrentNamespace();
+	   
+	   $using_directive::currentScope = currentScope;
+	   
+	   try{
+		   if($global_scope != null){
+		   	curr = this.symbolTable.findNamespace(id, currentScope, false);
+		   }
+		   else{
+		   	curr = currentScope.findNamespace(id, currentScope, false);
+		   }
+		   
+		   if(!(curr instanceof Namespace)) curr = null;
+	   }
+	   catch(ErrorMessage _){
+	   	
+	   }
+	   
+	   if(curr == null){
+	   	this.yield_error("error: '" + id + "' is not a namespace-name", this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
+	   	
+	   	Token nextToken = this.input.LT(1);
+	   	
+	   	this.yield_error("error: expected namespace-name before '" + nextToken.getText() + "' token", this.fixLine(nextToken), nextToken.getCharPositionInLine());
+	   }
+	   else{
+	   	$using_directive::finalNamespace = (Namespace) curr;
+	   }
 	}
-	using_directive_tail[ (Namespace) curr]?
+	using_directive_tail[$using_directive::currUsing, $using_directive::currentScope]?
+	{
+	   if(this.symbolTable.isCurrentNamespaceClass() == true){
+	   	this.yield_error("error: using directives are only allowed within namespaces", this.fixLine($us), $us.getCharPositionInLine());
+	   }
+	   else{
+	   	if($using_directive::finalNamespace != null){
+	   		((Namespace) $using_directive::currentScope).insertUsingDirective($using_directive::finalNamespace);
+	   	}
+	   }
+	}
 	;
 
-using_directive_tail [Namespace currentNamespace]
-	: '::' IDENTIFIER using_directive_tail
+using_directive_tail [Namespace currentNamespace, DefinesNamespace currentScope]
+scope{
+	Namespace currNamespace;
+	DefinesNamespace currScope;
+}
+@init{
+	$using_directive_tail::currNamespace = null;
+	$using_directive_tail::currScope = $currentScope;
+}
+	: '::' IDENTIFIER 
+	  {	String id = $IDENTIFIER.text;
+	  	DefinesNamespace tmp = null;
+	  	if(currentNamespace != null){
+		  	try{
+		  		tmp = $currentNamespace.findNamespace(id, $currentScope, false);
+		  		
+		  		if(!(tmp instanceof Namespace)) $using_directive_tail::currNamespace = null;
+		  		else $using_directive_tail::currNamespace = (Namespace) tmp;
+		  	}
+		  	catch(ErrorMessage _){
+		  	
+		  	}
+		  	
+		  	if($using_directive_tail::currNamespace == null){
+		  		this.yield_error("error: '" + id + "' is not a namespace-name", this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
+	   	
+			   	Token nextToken = this.input.LT(1);
+			   	
+			   	this.yield_error("error: expected namespace-name before '" + nextToken.getText() + "' token",
+			   			 this.fixLine(nextToken), 
+			   			 nextToken.getCharPositionInLine());
+		  	}
+	  	}
+	  }
+	  using_directive_tail[$using_directive_tail::currNamespace, $using_directive_tail::currScope]
 	| '::' IDENTIFIER
+	  {
+	  	String id = $IDENTIFIER.text;
+	  	DefinesNamespace tmp = null;
+	  	if(currentNamespace != null){
+		  	try{
+		  		tmp = $currentNamespace.findNamespace(id, $currentScope, false);
+		  		
+		  		if(!(tmp instanceof Namespace)) $using_directive_tail::currNamespace = null;
+		  	}
+		  	catch(ErrorMessage _){
+		  	
+		  	}
+		  	
+		  	if($using_directive_tail::currNamespace == null){
+		  		this.yield_error("error: '" + id + "' is not a namespace-name", this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
+	   	
+			   	Token nextToken = this.input.LT(1);
+			   	
+			   	this.yield_error("error: expected namespace-name before '" + nextToken.getText() + "' token",
+			   			 this.fixLine(nextToken), 
+			   			 nextToken.getCharPositionInLine());
+		  	}
+		  	else{
+		  		$using_directive::finalNamespace = $using_directive_tail::currNamespace;
+		  	}
+	  	}
+	  }
 	;
 
 simple_declaration
