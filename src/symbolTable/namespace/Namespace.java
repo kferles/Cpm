@@ -1,16 +1,7 @@
 package symbolTable.namespace;
 
-import errorHandling.AccessSpecViolation;
-import errorHandling.AmbiguousReference;
-import errorHandling.CannotBeOverloaded;
-import errorHandling.ChangingMeaningOf;
-import errorHandling.ConflictingDeclaration;
-import errorHandling.DiffrentSymbol;
-import errorHandling.InvalidScopeResolution;
-import errorHandling.Redefinition;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
+import errorHandling.*;
+import java.util.*;
 import symbolTable.types.Method;
 import symbolTable.types.Type;
 
@@ -38,11 +29,60 @@ public class Namespace implements DefinesNamespace{
     
     protected Set<Namespace> usingDirectives = null;
     
+    protected Set<Namespace> usingDirectives = null;
+    
+    protected Set<String> conflictsInTypeNames = null;
+    
     DefinesNamespace belongsTo;
     
     String fileName;
     
     int line, pos;
+    
+    private void findAllCandidates(String name,
+                                   DefinesNamespace from_scope, 
+                                   HashSet<Namespace> visited, 
+                                   List<TypeDefinition> typeAgr,
+                                   List<Namespace> namespaceAgr,
+                                   List<NamespaceElement<? extends Type>> fieldArg,
+                                   Namespace firstNamespace) {
+        
+        if(visited.contains(this) == true) return;
+        
+        visited.add(this);
+        
+        if(this.innerTypes != null && this.innerTypes.containsKey(name) == true){
+            NamespaceElement<CpmClass> tElem = this.innerTypes.get(name);
+            typeAgr.add(tElem.element);
+        }
+        else if(this.innerSynonynms != null && this.innerSynonynms.containsKey(name) == true){
+            NamespaceElement<SynonymType> sElem = this.innerSynonynms.get(name);
+            typeAgr.add(sElem.element);
+        }
+        else if(this.innerNamespaces != null && this.innerNamespaces.containsKey(name) == true){
+            NamespaceElement<Namespace> nElem = this.innerNamespaces.get(name);
+            namespaceAgr.add(nElem.element);
+        }
+        else if(this.fields != null && this.fields.containsKey(name) == true){
+            NamespaceElement<Type> tElem = this.fields.get(name);
+            fieldArg.add(tElem);
+        }
+        else if(this.methods != null && this.methods.containsKey(name) == true){
+            HashMap<Method.Signature, NamespaceElement<Method>> meths = this.methods.get(name);
+            
+            for(NamespaceElement<Method> meth : meths.values()){
+                fieldArg.add(meth);
+            }
+        }
+        
+        if((typeAgr.isEmpty() == false || namespaceAgr.isEmpty() == false || fieldArg.isEmpty() == false) && this == firstNamespace) return;
+        
+        if(this.usingDirectives != null){
+            for(Namespace namSpace : this.usingDirectives){
+                namSpace.findAllCandidates(name, from_scope, visited, typeAgr, namespaceAgr, fieldArg, firstNamespace);
+            }
+        }
+    }
     
         protected class NamespaceElement <T> implements MemberElementInfo<T> {
             
@@ -358,9 +398,17 @@ public class Namespace implements DefinesNamespace{
         return this.fileName;
     }
     
+    public int getLine(){
+        return this.line;
+    }
+    
+    public int getPos(){
+        return this.pos;
+    }
+    
     @Override
     public String toString(){
-        return this.getStringName(new StringBuilder()).toString();
+        return "namespace " + this.getStringName(new StringBuilder()).toString();
     }
 
     /*
@@ -395,14 +443,34 @@ public class Namespace implements DefinesNamespace{
     }
 
     @Override
-    public TypeDefinition findNamedType(String name, DefinesNamespace _, boolean ignore_access) {
+    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AmbiguousReference {
         TypeDefinition rv = null;
-        if(this.innerTypes != null && this.innerTypes.containsKey(name) == true){
-            rv = this.innerTypes.get(name).element;
+        int typeResSize, fldResSize, namespaceResSize;
+        List<TypeDefinition> candidatesTypes = new ArrayList<TypeDefinition>();
+        List<NamespaceElement<? extends Type>> candidateFields = new ArrayList<NamespaceElement<? extends Type>>();
+        List<Namespace> candidateNamespaces = new ArrayList<Namespace>();
+
+        this.findAllCandidates(name,
+                               from_scope,
+                               new HashSet<Namespace>(),
+                               candidatesTypes,
+                               candidateNamespaces,
+                               candidateFields,
+                               this);
+
+        typeResSize = candidatesTypes.size();
+        fldResSize = candidateFields.size();
+        namespaceResSize = candidateNamespaces.size();
+        
+        if(typeResSize + fldResSize + namespaceResSize > 1){
+            throw new AmbiguousReference(candidatesTypes, candidateNamespaces, candidateFields, name);
         }
-        else if(this.innerSynonynms != null && this.innerSynonynms.containsKey(name) == true){
-            rv = this.innerSynonynms.get(name).element;
+        else{
+            if(typeResSize == 1){
+                rv = candidatesTypes.get(0);
+            }
         }
+        
         return rv;
     }
     
@@ -444,8 +512,32 @@ public class Namespace implements DefinesNamespace{
     }
     
     public void insertUsingDirective(Namespace nm){
+        if(this.conflictsInTypeNames == null) this.conflictsInTypeNames = new HashSet<String>();
         if(this.usingDirectives == null) this.usingDirectives = new HashSet<Namespace>();
         
         this.usingDirectives.add(nm);
+        
+        Set<String> typeNames = nm.visibleTypeNames.keySet();
+        Set<String> fieldNames = nm.allSymbols.keySet();
+        
+        for(String typeName : typeNames){
+            if(this.conflictsInTypeNames.contains(typeName) == false){
+                if(this.visibleTypeNames.containsKey(typeName) == false){
+                    this.visibleTypeNames.put(typeName, nm.visibleTypeNames.get(typeName));
+                }
+                else{
+                    this.visibleTypeNames.remove(typeName);
+                    this.conflictsInTypeNames.add(typeName);
+                }
+            }
+        }
+        
+        for(String fieldName : fieldNames){
+            if(this.conflictsInTypeNames.contains(fieldName) == false){
+                if(this.visibleTypeNames.containsKey(fieldName) == true){
+                    this.visibleTypeNames.remove(fieldName);
+                }
+            }
+        }
     }
 }

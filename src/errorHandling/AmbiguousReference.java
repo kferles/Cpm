@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import symbolTable.namespace.DefinesNamespace;
 import symbolTable.namespace.MemberElementInfo;
+import symbolTable.namespace.Namespace;
 import symbolTable.namespace.TypeDefinition;
 import symbolTable.types.Type;
 
@@ -29,10 +30,10 @@ public class AmbiguousReference extends ErrorMessage {
     
     boolean isPending = false;
     
-    public AmbiguousReference(List<TypeDefinition> candidatesTypes, List<? extends MemberElementInfo<? extends Type>> candidateFields, String referenced_name){
+    public AmbiguousReference(List<TypeDefinition> candidatesTypes, List<Namespace> candidateNameSpaces, List<? extends MemberElementInfo<? extends Type>> candidateFields, String referenced_name){
         super("");
         this.referenced_type = referenced_name;
-        boolean typesEmpty;
+        boolean typesEmpty, namespacesEmpty = false;
         
         
         if((typesEmpty = candidatesTypes.isEmpty()) == false){
@@ -46,13 +47,25 @@ public class AmbiguousReference extends ErrorMessage {
             }
         }
         
-        if(typesEmpty){
+        if(typesEmpty && (namespacesEmpty = candidateNameSpaces != null ? candidateNameSpaces.isEmpty() : true) == false){
+            Namespace firstNamespace = candidateNameSpaces.get(0);
+            this.lines_errors.add(firstNamespace.getFileName() + " line " + firstNamespace.getLine() + ":" + firstNamespace.getPos()
+                                  + " error: candidates are: " + firstNamespace + "\n");
+        }
+
+        for(int i = (typesEmpty && !namespacesEmpty) ? 1 : 0 ; i < candidateNameSpaces.size() ; ++i){
+            Namespace namespace = candidateNameSpaces.get(i);
+            this.lines_errors.add(namespace.getFileName() + " line " + namespace.getLine() + ":" + namespace.getPos()
+                                  + " error:                 " + namespace);
+        }
+        
+        if(typesEmpty && namespacesEmpty){
             MemberElementInfo<? extends Type> firstField = candidateFields.get(0);
             this.lines_errors.add(firstField.getFileName() + " line " + firstField.getLine() + ":" + firstField.getPos()
                                   + " error: candidates are: " + firstField.getElement().toString(referenced_name) + "\n");
         }
-
-        for(int i = typesEmpty == true ? 1 : 0 ; i < candidateFields.size() ; ++i){
+        
+        for(int i = (typesEmpty && namespacesEmpty) ? 1 : 0 ; i < candidateFields.size() ; ++i){
             MemberElementInfo<? extends Type> memberInf = candidateFields.get(i);
             lines_errors.add(memberInf.getFileName() + " line " + memberInf.getLine() + ":" + memberInf.getPos()
                              + " error:                 " + memberInf.getElement().toString(referenced_name) + "\n");

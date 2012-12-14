@@ -1067,7 +1067,11 @@ scope normal_mode_fail_level;
 	  		$normal_mode_fail_level::failed = true;
 	  	}
 	  }
-	  '{' external_declaration*  '}' turn_on_normal_mode
+	  '{' external_declaration*  '}'
+	  {
+  	  	this.symbolTable.endScope();
+  	  }
+	   turn_on_normal_mode
 	;
 	
 extern_method_definition
