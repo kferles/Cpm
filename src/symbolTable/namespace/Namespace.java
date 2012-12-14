@@ -29,8 +29,6 @@ public class Namespace implements DefinesNamespace{
     
     protected Set<Namespace> usingDirectives = null;
     
-    protected Set<Namespace> usingDirectives = null;
-    
     protected Set<String> conflictsInTypeNames = null;
     
     DefinesNamespace belongsTo;
