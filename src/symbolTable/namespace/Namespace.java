@@ -9,14 +9,10 @@ import errorHandling.DiffrentSymbol;
 import errorHandling.InvalidScopeResolution;
 import errorHandling.Redefinition;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import symbolTable.types.Method;
 import symbolTable.types.Type;
-
-/*
- * note: line and pos to classes and namespaces (inside the classContent element)
- * are a bit useless for now (but keep them for any case)
- */
-
 
 /**
  *
@@ -39,6 +35,8 @@ public class Namespace implements DefinesNamespace{
     protected HashMap<String, NamespaceElement<SynonymType>> innerSynonynms = null;
     
     protected HashMap<String, TypeDefinition> visibleTypeNames = null;
+    
+    protected Set<Namespace> usingDirectives = null;
     
     DefinesNamespace belongsTo;
     
@@ -443,5 +441,11 @@ public class Namespace implements DefinesNamespace{
     @Override
     public String getName(){
         return this.name;
+    }
+    
+    public void insertUsingDirective(Namespace nm){
+        if(this.usingDirectives == null) this.usingDirectives = new HashSet<Namespace>();
+        
+        this.usingDirectives.add(nm);
     }
 }
