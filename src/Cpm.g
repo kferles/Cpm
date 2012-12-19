@@ -38,6 +38,19 @@ options {
     output=AST;
 }
 
+tokens{
+	DECLARATION;
+	DECLARATION_LIST;
+	LINE_MARKER;
+	INDEX;
+	CALL;
+	OBJ_ACCESS;
+	PTR_ACCESS;
+	INCR_POSTFIX;
+	DECR_POSTFIX;
+	INITIALIZER_LIST;
+}
+
 scope Type_Spec{
 	boolean error_for_signed, error_for_unsigned, error_for_short;
 	boolean type[];
@@ -112,6 +125,7 @@ import symbolTable.namespace.*;
 import symbolTable.namespace.stl.container.StlContainer;
 import errorHandling.*;
 import preprocessor.*;
+import treeNodes4antlr.*;
 }
 
 @parser::members {
@@ -1123,12 +1137,12 @@ scope{
 @after {
   this.resetErrorMessageAuxVars();
 }
-	: (struct_union_or_class IDENTIFIER ':' 'public') => struct_union_or_class_definition ';'
+	: (struct_union_or_class IDENTIFIER ':' 'public') => struct_union_or_class_definition ';'  //-> ^(DECL {new CommonTree((CommonTree)$struct_union_or_class_definition.tree)})
 	| (struct_union_or_class IDENTIFIER '{') => struct_union_or_class_definition ';'
 	| (struct_union_or_class nested_name_id ':' 'public') => extern_class_definition ';'
 	| (struct_union_or_class nested_name_id '{') => extern_class_definition ';'
 	|'typedef' { $declaration::isTypedef = true; } simple_declaration ';'
-	| simple_declaration ';'
+	| simple_declaration ';'!
 	| using_directive ';'
 	| line_marker
 	;
@@ -1269,7 +1283,7 @@ scope{
 	$simple_declaration::enumId = null;
 }
  	:
-	  declaration_specifiers
+	  declaration_specifiers!
 	  decl_list = init_declarator_list[$declaration_specifiers.error != null ? $declaration_specifiers.error + $declaration_specifiers.init_decl_err : null,
 	  				   $declaration_specifiers.t,
 	  				   $declaration_specifiers.class_specs]?
@@ -1432,9 +1446,11 @@ scope{
 	  {
 	  	$newTypeInRv = $init_declarator_list::newTinRv;
 	  }
+	  
+	  -> ^(DECLARATION_LIST init_declarator+)
 	;
 
-init_declarator [String error, Type data_type, InClassDeclSpec class_specs] 
+init_declarator [String error, Type data_type, InClassDeclSpec class_specs] returns [Type declType]
 scope declarator_strings;
 scope decl_infered;
 scope decl_id_info;
@@ -1442,11 +1458,11 @@ scope decl_id_info;
 	$declarator_strings::dir_decl_identifier = null;
 	$declarator_strings::dir_decl_error = $error;
 	$decl_infered::declarator = null;
-	
 }
 	: declarator { not_null_decl_id($declarator_strings::dir_decl_identifier, $declarator_strings::dir_decl_error, $declarator.start) }? 
-	  ('=' initializer)?
+	  (eq = '=' initializer)?
 	  {	//todo: error for typedef with initializer
+	  	$declType = null;
 	  	if($declarator_strings::dir_decl_identifier != null){
 	  		DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
 		  	if($data_type != null){
@@ -1455,6 +1471,7 @@ scope decl_id_info;
 			  	int id_pos = $decl_id_info::pos;
 			  	if(decl_inf_t == null) {
 			  		if($function_definition.size() == 0) System.out.println($data_type.toString(declarator_id));
+			  		$declType = $data_type;
 			  		if($declaration.size() > 0 && $declaration::isTypedef == true){
 			  			this.insertSynonym(declarator_id, $data_type, id_line, id_pos, $class_specs);
 			  		}
@@ -1481,6 +1498,7 @@ scope decl_id_info;
 				  		if(decl_inf_t.p_rv != null){
 				  			//System.out.println(declarator_id);
 				  			System.out.println(decl_inf_t.p_rv.toString(declarator_id));
+				  			$declType = decl_inf_t.p_rv;
 				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
 					  			this.insertSynonym(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
 					  		}
@@ -1492,6 +1510,7 @@ scope decl_id_info;
 				  		}
 				  		else if(decl_inf_t.m_rv != null){
 				  			System.out.println(decl_inf_t.m_rv.toString(declarator_id));
+				  			$declType = decl_inf_t.m_rv;
 				  			if(($struct_union_or_class_definition.size() > 0 && $class_declaration_list.size() == 0) ||
 				  			    $extern_class_definition.size() > 0 ||
 				  			   ($simple_declaration.size() > 0 && $simple_declaration::isEnumDef == true) ){
@@ -1527,6 +1546,7 @@ scope decl_id_info;
 				  		else if(decl_inf_t.ar_rv != null){
 				  			CpmArray ar = decl_inf_t.ar_rv;
 				  			System.out.println(ar.toString(declarator_id));
+				  			$declType = ar;
 				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
 					  			this.insertSynonym(declarator_id, ar, id_line, id_pos, $class_specs);
 					  		}
@@ -1546,6 +1566,11 @@ scope decl_id_info;
 		  	}
 	  	}
 	  }
+	  
+	  -> {$eq == null}? ^(DECLARATION<DeclarationToken>[$declType] declarator)
+	  -> ^(DECLARATION<DeclarationToken>[$declType] ^('=' declarator initializer))
+	  //-> ^({new CommonToken(DECL, "DECL")} declarator)
+	  //-> ^(DECL declarator)
 	;
 	
 storage_class_specifier
@@ -1670,7 +1695,10 @@ scope{
 	$templateArgs = $nested_name_id::arguments;
 	$containsTemplate = $nested_name_id::isTemplateId;
 }
-	: '::'? id scope_resolution*
+	: glob = '::'? id scope_resolution*
+	
+	-> {$glob != null}? ^($glob id scope_resolution*)
+	-> ^(id scope_resolution*)
 	;
 	
 scope_resolution
@@ -2418,25 +2446,27 @@ scope{
 
 	: { $declarator::pointers = new ArrayList<ptr_cv>(); } 
 	p = pointer[$declarator::pointers]? direct_declarator 
-					    { 
-					    	if($p.tree != null){
-					    		ptr_cv quals = $declarator::pointers.get(0);
-					    		Pointer ptr = new Pointer(null, quals.isConst, quals.isVolatile);
-					    		Pointer pending = ptr;
-					    		for(int i = 1 ; i < $declarator::pointers.size() ; ++i){
-					    			quals = $declarator::pointers.get(i);
-					    			Pointer temp = new Pointer(null, quals.isConst, quals.isVolatile);
-					    			pending.setPointsTo(temp);
-					    			pending = temp;
-					    		}
-						    	if($decl_infered::declarator == null){
-						    		$decl_infered::declarator = new DeclaratorInferedType(ptr, pending);
-						    	}
-						    	else{
-						    		$decl_infered::declarator.setPending(ptr, pending);
-						    	}
-					    	}
-					    }
+	{ 
+	    	if($p.tree != null){
+	    		ptr_cv quals = $declarator::pointers.get(0);
+	    		Pointer ptr = new Pointer(null, quals.isConst, quals.isVolatile);
+	    		Pointer pending = ptr;
+	    		for(int i = 1 ; i < $declarator::pointers.size() ; ++i){
+	    			quals = $declarator::pointers.get(i);
+	    			Pointer temp = new Pointer(null, quals.isConst, quals.isVolatile);
+	    			pending.setPointsTo(temp);
+	    			pending = temp;
+	    		}
+		    	if($decl_infered::declarator == null){
+		    		$decl_infered::declarator = new DeclaratorInferedType(ptr, pending);
+		    	}
+		    	else{
+		    		$decl_infered::declarator.setPending(ptr, pending);
+		    	}
+	    	}
+	}
+	
+	-> direct_declarator
 	//| pointer
 	;
 
@@ -2450,7 +2480,9 @@ direct_declarator
 			   	$decl_id_info::pos = $IDENTIFIER.pos;
 			   }
 			   if(pending_undeclared_err != null) pending_undeclared_err = null;
-			   direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error); }
+			   direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error); } 
+			   
+			   -> IDENTIFIER
 			//{
 			//if ($declaration.size()>0&& ($declaration::isTypedef)) {
 			//	$Symbols::types.add($IDENTIFIER.text);
@@ -2806,10 +2838,12 @@ direct_abstract_declarator
 initializer
 	: assignment_expression
 	| '{' initializer_list ','? '}'
+	-> initializer_list
 	;
 
 initializer_list
 	: initializer (',' initializer)*
+	-> ^(INITIALIZER_LIST initializer+)
 	;
 
 // E x p r e s s i o n s
@@ -2819,11 +2853,11 @@ argument_expression_list
 	;
 
 additive_expression
-	: (multiplicative_expression) ('+' multiplicative_expression | '-' multiplicative_expression)*
+	: (multiplicative_expression) ('+'^ multiplicative_expression | '-'^ multiplicative_expression)*
 	;
 
 multiplicative_expression
-	: (cast_expression) ('*' cast_expression | '/' cast_expression | '%' cast_expression)*
+	: (cast_expression) ('*'^ cast_expression | '/'^ cast_expression | '%'^ cast_expression)*
 	;
 
 cast_expression
@@ -2841,14 +2875,19 @@ unary_expression
 	;
 
 postfix_expression
-	:   primary_expression
+	:   (primary_expression -> primary_expression)
         (   '[' expression ']'
-        |   '(' ')'
-        |   '(' argument_expression_list ')'
+      	     -> ^(INDEX $postfix_expression expression)
+        |   '(' argument_expression_list? ')'
+            -> ^(CALL $postfix_expression argument_expression_list?)
         |   '.' IDENTIFIER
-        |   '->' IDENTIFIER
+            -> ^(OBJ_ACCESS $postfix_expression nested_name_id)
+        |   '->' nested_name_id
+            -> ^(PTR_ACCESS $postfix_expression nested_name_id)
         |   '++'
+            -> ^(INCR_POSTFIX $postfix_expression)
         |   '--'
+            -> ^(DECR_POSTFIX $postfix_expression)
         )*
 	;
 
@@ -2884,20 +2923,19 @@ expression
 
 constant_expression
 	: conditional_expression
-		;
+	;
 
 assignment_expression
-	: lvalue assignment_operator assignment_expression -> ^(assignment_expression lvalue assignment_expression)
+	: lvalue assignment_operator assignment_expression -> ^(assignment_operator lvalue assignment_expression)
 	| conditional_expression
-	| new_exp
 	;
+
 new_exp
 	: 'new' nested_name_id ('('argument_expression_list?')')?
 	;
 
-	
 lvalue
-	:	unary_expression
+	: unary_expression
 	;
 
 assignment_operator
@@ -2915,38 +2953,43 @@ assignment_operator
 	;
 
 conditional_expression
-	: logical_or_expression ('?' expression ':' conditional_expression)?
+	: logical_or_expression (tern = '?' expression semi = ':' conditional_expression)? // a bit diffrent in C++
+	
+	-> {$tern != null}? ^($tern logical_or_expression ^($semi expression conditional_expression))
+	-> logical_or_expression
 	;
 
 logical_or_expression
-	: logical_and_expression ('||' logical_and_expression)*
+	: logical_and_expression ('||'^ logical_and_expression)*
 	;
 
 logical_and_expression
-	: inclusive_or_expression ('&&' inclusive_or_expression)*
+	: inclusive_or_expression ('&&'^ inclusive_or_expression)*
 	;
 
 inclusive_or_expression
-	: exclusive_or_expression ('|' exclusive_or_expression)*
+	: exclusive_or_expression ('|'^ exclusive_or_expression)*
 	;
 
+//todo: assiocetivity !!! here and everywhere
 exclusive_or_expression
-	: and_expression ('^' and_expression)*
+	: and_expression ('^'^ and_expression)*
 	;
 
 and_expression
-	: equality_expression ('&' equality_expression)*
+	: equality_expression ('&'^ equality_expression)*
 	;
+
 equality_expression
-	: relational_expression (('=='|'!=') relational_expression)*
+	: relational_expression (('=='|'!=')^ relational_expression)*
 	;
 
 relational_expression
-	: shift_expression (('<'|'>'|'<='|'>=') shift_expression)*
+	: shift_expression (('<'|'>'|'<='|'>=')^ shift_expression)*
 	;
 
 shift_expression
-	: additive_expression (('<<'|'>>') additive_expression)*
+	: additive_expression (('<<'|'>>')^ additive_expression)*
 	;
 
 // S t a t e m e n t s
@@ -2988,9 +3031,9 @@ iteration_statement
 	: 'while' '(' expression ')' statement
 	| 'do' statement 'while' '(' expression ')' ';'
 	| 'for' '(' init_for_iteration_stmt expression_statement expression? ')' statement
-		;
+	;
 			
-			init_for_iteration_stmt
+init_for_iteration_stmt
 	: //simple_declaration
 	  expression_statement
 	;
@@ -3012,7 +3055,7 @@ jump_statement
  * And of course in this phase the output would be correct,
  * because it comes from cpp
  */
- 
+  
 line_marker
 scope{
 	boolean is_enter;
@@ -3053,6 +3096,8 @@ scope{
 										  }
 									  }
 									}
+									
+									-> ^(LINE_MARKER DECIMAL_LITERAL STRING_LITERAL line_marker_flags?)
 	;
 
 line_marker_flags
@@ -3063,7 +3108,9 @@ line_marker_flags
 	  	else if(flag == 2) $line_marker::is_exit = true;
 	  	else if(flag == 3) $line_marker::is_stl_header = true;
 	  }
-	  line_marker_flags
+	  line_marker_flags 
+	  
+	  -> ^(DECIMAL_LITERAL line_marker_flags)
 	| DECIMAL_LITERAL
 	  {
 	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
