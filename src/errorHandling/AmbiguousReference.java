@@ -19,15 +19,15 @@ import symbolTable.types.Type;
 public class AmbiguousReference extends ErrorMessage {
     
     private List<String> lines_errors = new ArrayList<String>();
-    
+
     private String referenced_type;
-    
+
     private DefinesNamespace last_valid;
-    
+
     private String referenced_err;
-    
+
     private String final_err;
-    
+
     boolean isPending = false;
     
     public AmbiguousReference(List<TypeDefinition> candidatesTypes, List<Namespace> candidateNameSpaces, List<? extends MemberElementInfo<? extends Type>> candidateFields, String referenced_name){
@@ -56,7 +56,7 @@ public class AmbiguousReference extends ErrorMessage {
         for(int i = (typesEmpty && !namespacesEmpty) ? 1 : 0 ; i < candidateNameSpaces.size() ; ++i){
             Namespace namespace = candidateNameSpaces.get(i);
             this.lines_errors.add(namespace.getFileName() + " line " + namespace.getLine() + ":" + namespace.getPos()
-                                  + " error:                 " + namespace);
+                                  + " error:                 " + namespace + "\n");
         }
         
         if(typesEmpty && namespacesEmpty){
