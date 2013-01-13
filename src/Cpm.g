@@ -2489,7 +2489,7 @@ direct_declarator
 			//	System.out.println("define type "+$IDENTIFIER.text);
 			//}
 			//}
-		|	'(' dcl = declarator ')'
+		|	'(' dcl = declarator ')' -> declarator
 		)
         	declarator_suffix*
 	;
