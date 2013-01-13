@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package errorHandling;
 
 import java.util.ArrayList;
@@ -13,26 +9,87 @@ import symbolTable.namespace.TypeDefinition;
 import symbolTable.types.Type;
 
 /**
- *
+ * Class for creating error messages when there is an ambiguous reference to
+ * an identifier. These are multiple line messages, because they list all
+ * the possible candidates for the identifier.
+ * 
+ * Example:
+ * 
+ *  class A {
+ *    class B {};
+ *  };
+ * 
+ * 
+ *  class C {
+ *    int B;
+ *  };
+ * 
+ * 
+ *  class D : public A, public C{
+ *    B *b; //filename thisLine:thisPos error: reference to B is ambiguous
+ *          //classA'sFilename classB'sLine:classB'sPos error: candidates are : class B
+ *          //classC'sFilename classC'sLine:classC'sPos error:                  int B
+ *  };
+ * 
  * @author kostas
  */
 public class AmbiguousReference extends ErrorMessage {
     
+    /**
+     * All the lines for the candidates of the error message.
+     */
     private List<String> lines_errors = new ArrayList<String>();
 
-    private String referenced_type;
+    /**
+     * The ambiguous referenced identifier.
+     */
+    private String referenced_name;
 
+    /**
+     * The last valid namespace. This is for cases, where 
+     * the parser tries input as a type.
+     */
     private DefinesNamespace last_valid;
 
+    /**
+     * This the head of the message (i.e error: reference to identifier is ambiguous).
+     */
     private String referenced_err;
 
+    /**
+     * This is the last line of the error message (after listing all the candidates).
+     * This optional for some cases.
+     */
     private String final_err;
 
+    /**
+     * Determines whether the error is pending or not. That is, in some cases parser tries
+     * to recognize an input but it has more than one alternatives. So, if it fails with the
+     * first one, it tries the second one and so on. Variable isPending is by default to false
+     * and if there are more alternatives it should be manually set to true.
+     */
     boolean isPending = false;
     
-    public AmbiguousReference(List<TypeDefinition> candidatesTypes, List<Namespace> candidateNameSpaces, List<? extends MemberElementInfo<? extends Type>> candidateFields, String referenced_name){
+    /**
+     * Creates an error message given all the candidates for the referenced name.
+     * 
+     * @param candidatesTypes Candidates types for the referenced name.
+     * @param candidateNameSpaces Candidate namespaces for the referenced name.
+     * @param candidateFields Candidate fields for the referenced name.
+     * @param referenced_name The referenced identifier.
+     */
+    public AmbiguousReference(List<TypeDefinition> candidatesTypes,
+                              List<Namespace> candidateNameSpaces,
+                              List<? extends MemberElementInfo<? extends Type>> candidateFields,
+                              String referenced_name){
+
         super("");
-        this.referenced_type = referenced_name;
+
+        if(candidatesTypes == null || candidateNameSpaces == null || candidateFields == null || referenced_name == null){
+            throw new IllegalArgumentException();
+        }
+        
+        this.referenced_name = referenced_name;
         boolean typesEmpty, namespacesEmpty = false;
         
         
@@ -72,10 +129,21 @@ public class AmbiguousReference extends ErrorMessage {
         }
     }
     
+    /**
+     * Sets the last valid namespace.
+     * 
+     * @param last_valid The last valid namespace looking for the identifier.
+     */
     public void setLastValid(DefinesNamespace last_valid){
         this.last_valid = last_valid;
     }
     
+    
+    /**
+     * Returns the error message for the candidates (all the lines).
+     * 
+     * @return The error message.
+     */
     @Override
     public String getMessage(){
         StringBuilder rv = new StringBuilder();
@@ -87,20 +155,42 @@ public class AmbiguousReference extends ErrorMessage {
         return rv.toString();
     }
     
+    /**
+     * Returns the reference error. That is, reference to 'identifier' is ambiguous.
+     * 
+     * @return The text for the above error.
+     */
     public String getRefError(){
         return this.referenced_err;
     }
     
+    /**
+     * Returns the last line of the error message (after the list of all candidates).
+     * 
+     * @return The text for the last line of the error message.
+     */
     public String getLastLine(){
         return this.final_err;
     }
-    
+
+    /**
+     * Sets the reference error message. It takes the line and the pos of the ambiguous reference to the identifier.
+     * 
+     * @param line The line of the error.
+     * @param pos  The position in the above line.
+     */
     public void referenceTypeError(int line, int pos){
-        this.referenced_err = "line " + line + ":" + pos + " error: reference to '" + this.referenced_type +"' is ambiguous";
+        this.referenced_err = "line " + line + ":" + pos + " error: reference to '" + this.referenced_name +"' is ambiguous";
     }
     
+    /**
+     * Creates error message's last line, when parser tries to recognize a type. 
+     * 
+     * @param line The line of the error message.
+     * @param pos  The position in the above line.
+     */
     public void finalizeErrorMessage(int line, int pos){
-        String msg = "line " + line + ":" + pos + " error: '" + this.referenced_type + "'";
+        String msg = "line " + line + ":" + pos + " error: '" + this.referenced_name + "'";
         if(this.last_valid != null){
             msg += "in '" + this.last_valid +"'";
         }
@@ -108,8 +198,11 @@ public class AmbiguousReference extends ErrorMessage {
         this.final_err = msg;
     }
     
+    /**
+     * Creates error message's last line, when parser tries to recognize a type
+     */
     public void finalizeErrorMessage(){
-        String msg = "error: '" + this.referenced_type + "'";
+        String msg = "error: '" + this.referenced_name + "'";
         if(this.last_valid != null){
             msg += "in '" + this.last_valid +"'";
         }
@@ -117,10 +210,19 @@ public class AmbiguousReference extends ErrorMessage {
         this.final_err = msg;
     }
     
+    /**
+     * Sets is pending variable to true. That means that error message will be printed
+     * only if the parser fails to parse the input with a different alternative.
+     */
     public void setIsPending(){
         this.isPending = true;
     }
     
+    /**
+     * Returns the value of the isPending variable.
+     * 
+     * @return The value of the isPending variable.
+     */
     public boolean isPending(){
         return this.isPending;
     }
