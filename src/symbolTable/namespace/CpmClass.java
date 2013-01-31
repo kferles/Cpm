@@ -277,7 +277,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     }
     
     private String buildAccessErrorMsg(String fileName, int line, int pos, String id, String access_err){
-        return fileName + " line " + line + ":" + " error: '" + id + "' " + access_err;
+        return fileName + " line " + line + ":" + pos + " error: '" + id + "' " + access_err;
     }
     
     private void findAllCandidates(String name,
