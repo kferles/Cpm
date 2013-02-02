@@ -277,7 +277,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     }
     
     private String buildAccessErrorMsg(String fileName, int line, int pos, String id, String access_err){
-        return fileName + " line " + line + ":" + pos + " error: '" + id + "' " + access_err;
+        return fileName + " line " + line + ":" + " error: '" + id + "' " + access_err;
     }
     
     private void findAllCandidates(String name,
@@ -285,6 +285,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
                                    HashSet<CpmClass> visited, 
                                    List<TypeDefinition> typeAgr,
                                    List<ClassContentElement<? extends Type>> fieldArg,
+                                   List<ClassContentElement<Method>> methAgr,
                                    CpmClass first_class,
                                    Map<TypeDefinition, String> typeAccessErrors,
                                    Map<ClassContentElement<? extends Type>, String> fieldsAccessErrors) {
@@ -330,7 +331,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
                     fieldsAccessErrors.put(methElem, access_err);
                 }
 
-                fieldArg.add(methElem);
+                methAgr.add(methElem);
 
             }
         }
@@ -342,12 +343,12 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
          * in this case the inner type shadows all possible
          * candidates in super classes.
          */
-        if((typeAgr.isEmpty() == false || fieldArg.isEmpty() == false) && this == first_class) return;
+        if((typeAgr.isEmpty() == false || fieldArg.isEmpty() == false || methAgr.isEmpty() == false) && this == first_class) return;
         
         if(this.superClasses != null){
             for(CpmClass _super: this.superClasses){
                 if(_super.name.equals(name) == true) typeAgr.add(_super);
-                _super.findAllCandidates(name, from_scope, visited, typeAgr, fieldArg, first_class, typeAccessErrors, fieldsAccessErrors);
+                _super.findAllCandidates(name, from_scope, visited, typeAgr, fieldArg, methAgr, first_class, typeAccessErrors, fieldsAccessErrors);
             }
         }
 
@@ -782,27 +783,29 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, 
                                                                                                                 AmbiguousReference{
         TypeDefinition rv = null;
-        int typeResSize, fldResSize;
+        int typeResSize, fldResSize, methSize;
         Map<TypeDefinition, String> typeDefsErrors = new HashMap<TypeDefinition, String>();
         Map<ClassContentElement<? extends Type>, String> fieldErrors = new HashMap<ClassContentElement<? extends Type>, String>();
         List<TypeDefinition> candidatesTypes = new ArrayList<TypeDefinition>();
         List<ClassContentElement<? extends Type>> candidateFields = new ArrayList<ClassContentElement<? extends Type>>();
+        List<ClassContentElement<Method>> candidateMethods = new ArrayList<ClassContentElement<Method>>();
 
         this.findAllCandidates(name,
                                from_scope,
                                new HashSet<CpmClass>(),
                                candidatesTypes,
                                candidateFields,
+                               candidateMethods,
                                this,
                                typeDefsErrors,
                                fieldErrors);
 
         typeResSize = candidatesTypes.size();
         fldResSize = candidateFields.size();
+        methSize = candidateMethods.size();
 
-
-        if(typeResSize + fldResSize > 1){
-            throw new AmbiguousReference(candidatesTypes, null, candidateFields, name);
+        if(typeResSize + fldResSize + methSize > 1){
+            throw new AmbiguousReference(candidatesTypes, null, candidateFields, candidateMethods, name);
         }
         else{
             

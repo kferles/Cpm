@@ -6,6 +6,7 @@ import symbolTable.namespace.DefinesNamespace;
 import symbolTable.namespace.MemberElementInfo;
 import symbolTable.namespace.Namespace;
 import symbolTable.namespace.TypeDefinition;
+import symbolTable.types.Method;
 import symbolTable.types.Type;
 
 /**
@@ -81,16 +82,13 @@ public class AmbiguousReference extends ErrorMessage {
     public AmbiguousReference(List<TypeDefinition> candidatesTypes,
                               List<Namespace> candidateNameSpaces,
                               List<? extends MemberElementInfo<? extends Type>> candidateFields,
+                              List<? extends MemberElementInfo<Method>> candidateMethods,
                               String referenced_name){
 
         super("");
-
-        if(candidatesTypes == null || candidateNameSpaces == null || candidateFields == null || referenced_name == null){
-            throw new IllegalArgumentException();
-        }
         
         this.referenced_name = referenced_name;
-        boolean typesEmpty, namespacesEmpty = false;
+        boolean typesEmpty, namespacesEmpty = false, candidateFldsEmpty = false;
         
         
         if((typesEmpty = candidatesTypes.isEmpty()) == false){
@@ -110,13 +108,16 @@ public class AmbiguousReference extends ErrorMessage {
                                   + " error: candidates are: " + firstNamespace + "\n");
         }
 
-        for(int i = (typesEmpty && !namespacesEmpty) ? 1 : 0 ; i < candidateNameSpaces.size() ; ++i){
-            Namespace namespace = candidateNameSpaces.get(i);
-            this.lines_errors.add(namespace.getFileName() + " line " + namespace.getLine() + ":" + namespace.getPos()
-                                  + " error:                 " + namespace + "\n");
+        if(candidateNameSpaces != null){
+            for(int i = (typesEmpty && !namespacesEmpty) ? 1 : 0 ; i < candidateNameSpaces.size() ; ++i){
+                Namespace namespace = candidateNameSpaces.get(i);
+                this.lines_errors.add(namespace.getFileName() + " line " + namespace.getLine() + ":" + namespace.getPos()
+                                      + " error:                 " + namespace + "\n");
+            }
         }
         
-        if(typesEmpty && namespacesEmpty){
+        
+        if(typesEmpty && namespacesEmpty && (candidateFldsEmpty = candidateFields.isEmpty()) == false){
             MemberElementInfo<? extends Type> firstField = candidateFields.get(0);
             this.lines_errors.add(firstField.getFileName() + " line " + firstField.getLine() + ":" + firstField.getPos()
                                   + " error: candidates are: " + firstField.getElement().toString(referenced_name) + "\n");
@@ -126,6 +127,18 @@ public class AmbiguousReference extends ErrorMessage {
             MemberElementInfo<? extends Type> memberInf = candidateFields.get(i);
             lines_errors.add(memberInf.getFileName() + " line " + memberInf.getLine() + ":" + memberInf.getPos()
                              + " error:                 " + memberInf.getElement().toString(referenced_name) + "\n");
+        }
+        
+        if(typesEmpty && namespacesEmpty && candidateFldsEmpty){
+            MemberElementInfo<Method> methInf = candidateMethods.get(0);
+            this.lines_errors.add(methInf.getFileName() + " line " + methInf.getLine() + ":" + methInf.getPos()
+                                  + " error: candidates are: " + methInf.getElement().toString(referenced_name) + "\n");
+        }
+        
+        for(int i = (typesEmpty && namespacesEmpty && candidateFldsEmpty) ? 1 : 0 ; i < candidateMethods.size() ; ++i){
+            MemberElementInfo<Method> methInf = candidateMethods.get(i);
+            this.lines_errors.add(methInf.getFileName() + " line " + methInf.getLine() + ":" + methInf.getPos()
+                                  + " error:                 " + methInf.getElement().toString(referenced_name) + "\n");
         }
     }
     

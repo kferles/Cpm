@@ -1596,7 +1596,7 @@ storage_class_specifier
 	  {storage_class_specs_error() == true}?
 	;
 	
-type_specifier /*returns [boolean failed]*/
+type_specifier
 	: 'void'
 	  {
 	     $Type_Spec::type[0] = true;
@@ -2219,16 +2219,16 @@ in_class_declaration
 	;
 	
 
-specifier_qualifier_list returns [Type t, String error, String init_decl_err/*, boolean type_spec_failed*/]
+specifier_qualifier_list returns [Type t, String error, String init_decl_err]
 scope Type_Spec;
 scope cv_qual;
 @init{
-	//$type_spec_failed = false;
+	
 	Type_Spec_at_init();
 	cv_qual_at_init();
 }
 	: (   type_qualifier
-           |  type_specifier /*{if($type_spec_failed == false) $type_spec_failed = $type_specifier.failed;}*/ )+
+           |  type_specifier)+
            {
            	Type_Spec_scope type_specs = get_Type_Spec_scope();
              	cv_qual_scope cv_quals = get_cv_qual_scope();
@@ -2269,6 +2269,10 @@ scope cv_qual;
              	}
            }
 	;
+inclass_function_definition
+	: specifier_qualifier_list declarator compound_statement
+	;
+
 
 class_declarator_list
 	: class_declarator (',' class_declarator)*
@@ -2469,7 +2473,8 @@ scope{
 
 
 direct_declarator
-	:   ( IDENTIFIER { $declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
+	:   (   /*nested_identifier -> nested_identifier
+		|*/ IDENTIFIER { $declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
 			   if($parameter_declaration.size() > 0) $parameter_declaration::p.id = $IDENTIFIER.text;
 			   if($decl_id_info.size() > 0){
 			   	$decl_id_info::line = this.fixLine($IDENTIFIER);
@@ -2720,11 +2725,11 @@ scope decl_infered;
 	  }
 	;
 
-/*identifier_list
+identifier_list
 	: IDENTIFIER (',' IDENTIFIER)*
-	;*/
+	;
 
-type_name [String id] returns [Type tp/*, boolean error_reported*/]
+type_name [String id] returns [Type tp]
 scope declarator_strings;
 scope decl_infered;
 @init{
@@ -2732,11 +2737,9 @@ scope decl_infered;
 	$declarator_strings::dir_decl_error = null;
 	$decl_infered::declarator = null;
 	$tp = null;
-	//$error_reported = false;
 }
 	: specifier_qualifier_list
 	  {
-	  	//$error_reported = $specifier_qualifier_list.type_spec_failed;
 	  	if($specifier_qualifier_list.error != null)
 		  	$declarator_strings::dir_decl_error = $specifier_qualifier_list.error + $specifier_qualifier_list.init_decl_err;
 	  }
@@ -2868,13 +2871,7 @@ unary_expression
 	| '++' unary_expression
 	| '--' unary_expression
 	| unary_operator cast_expression
-	| 'sizeof' '(' type_name["type name"] ')' /* This rule goes first, beacause the next one is more general.
-						   * In this phase this rule can produce error messages due to 
-						   * wrong usage of a type (e.g., apply operator on a private inner class).
-						   * However, an AST is being produced by the rule below, but if there
-						   * is an error in this one the parser stops (so eventually the tree
-						   * is ignored).
-						   */
+	| 'sizeof' '(' type_name["type name"] ')'
 	| 'sizeof' unary_expression
 	;
 
@@ -3038,7 +3035,7 @@ iteration_statement
 	;
 			
 init_for_iteration_stmt
-	: //simple_declaration (ANTLR bug)
+	: //simple_declaration
 	  expression_statement
 	;
 
@@ -3048,6 +3045,17 @@ jump_statement
 	| 'break' ';'
 	| 'return' ';'
 	| 'return' expression ';'
+	;
+	
+//C+- aux rules (different rules to adjust C's syntax)
+
+nested_identifier
+	: '::'? IDENTIFIER nested_identifier_tail 
+	;
+	
+nested_identifier_tail
+	: '::' IDENTIFIER nested_identifier_tail
+	|
 	;
 	
 //Preprocessor

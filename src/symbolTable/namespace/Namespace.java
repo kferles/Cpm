@@ -43,6 +43,7 @@ public class Namespace implements DefinesNamespace{
                                    List<TypeDefinition> typeAgr,
                                    List<Namespace> namespaceAgr,
                                    List<NamespaceElement<? extends Type>> fieldArg,
+                                   List<NamespaceElement<Method>> methAgr,
                                    Namespace firstNamespace) {
         
         if(visited.contains(this) == true) return;
@@ -69,15 +70,15 @@ public class Namespace implements DefinesNamespace{
             HashMap<Method.Signature, NamespaceElement<Method>> meths = this.methods.get(name);
             
             for(NamespaceElement<Method> meth : meths.values()){
-                fieldArg.add(meth);
+                methAgr.add(meth);
             }
         }
         
-        if((typeAgr.isEmpty() == false || namespaceAgr.isEmpty() == false || fieldArg.isEmpty() == false) && this == firstNamespace) return;
+        if((typeAgr.isEmpty() == false || namespaceAgr.isEmpty() == false || fieldArg.isEmpty() == false || methAgr.isEmpty() == false) && this == firstNamespace) return;
         
         if(this.usingDirectives != null){
             for(Namespace namSpace : this.usingDirectives){
-                namSpace.findAllCandidates(name, from_scope, visited, typeAgr, namespaceAgr, fieldArg, firstNamespace);
+                namSpace.findAllCandidates(name, from_scope, visited, typeAgr, namespaceAgr, fieldArg, methAgr, firstNamespace);
             }
         }
     }
@@ -446,6 +447,7 @@ public class Namespace implements DefinesNamespace{
         int typeResSize, fldResSize, namespaceResSize;
         List<TypeDefinition> candidatesTypes = new ArrayList<TypeDefinition>();
         List<NamespaceElement<? extends Type>> candidateFields = new ArrayList<NamespaceElement<? extends Type>>();
+        List<NamespaceElement<Method>> candidateMethods = new ArrayList<NamespaceElement<Method>> ();
         List<Namespace> candidateNamespaces = new ArrayList<Namespace>();
 
         this.findAllCandidates(name,
@@ -454,6 +456,7 @@ public class Namespace implements DefinesNamespace{
                                candidatesTypes,
                                candidateNamespaces,
                                candidateFields,
+                               candidateMethods,
                                this);
 
         typeResSize = candidatesTypes.size();
@@ -461,7 +464,7 @@ public class Namespace implements DefinesNamespace{
         namespaceResSize = candidateNamespaces.size();
         
         if(typeResSize + fldResSize + namespaceResSize > 1){
-            throw new AmbiguousReference(candidatesTypes, candidateNamespaces, candidateFields, name);
+            throw new AmbiguousReference(candidatesTypes, candidateNamespaces, candidateFields, candidateMethods, name);
         }
         else{
             if(typeResSize == 1){
