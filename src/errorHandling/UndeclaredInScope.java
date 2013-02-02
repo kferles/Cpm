@@ -1,7 +1,7 @@
 package errorHandling;
 
 /**
- *
+ * Unused class for now :P
  * @author kostas
  */
 public class UndeclaredInScope extends ErrorMessage{
