@@ -140,6 +140,13 @@ public class SymbolTable extends Namespace{
         super.innerNamespaces.put("std", new NamespaceElement<Namespace>(new Namespace("std", this), null, -1, -1));
     }
     
+    public static String getFieldsFullName(DefinesNamespace belongsTo, String name){
+        String rv = belongsTo.getFullName();
+        if(rv.equals("") == false) rv += "::";
+        rv += name;
+        return rv;
+    }
+    
     public void setCurrentAccess(CpmClass.AccessSpecifier access){
         this.current_access = access;
     }

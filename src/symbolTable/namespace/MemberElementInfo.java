@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package symbolTable.namespace;
 
 /**
@@ -17,5 +13,19 @@ public interface MemberElementInfo<T> {
     public int getPos();
     
     public T getElement();
+    
+    public boolean isStatic();
+    
+    public boolean isClassMember();
+    
+    public boolean isDefined();
+    
+    public void defineStatic(int defLine, int defPos, String defFilename);
+    
+    public int getStaticDefLine();
+    
+    public int getStaticDefPos();
+    
+    public String getStaticDefFile();
     
 }

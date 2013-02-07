@@ -4,8 +4,8 @@ import errorHandling.AmbiguousBaseClass;
 import java.util.ArrayList;
 import symbolTable.namespace.CpmClass;
 import symbolTable.namespace.DefinesNamespace;
-import symbolTable.namespace.TypeDefinition;
 import symbolTable.namespace.SynonymType;
+import symbolTable.namespace.TypeDefinition;
 
 /**
  *
@@ -73,6 +73,8 @@ public class Method extends Type{
                     if(this.parameters.get(i).equals(o.parameters.get(i)) == false) return false;
             }
             if(this.hasVarArgs != o.hasVarArgs) return false;
+            if(this.isConst != o.isConst) return false;
+            if(this.isVolatile != o.isVolatile) return false;
             return true;
         }
 
@@ -154,6 +156,10 @@ public class Method extends Type{
         return this.s.identicalParams(o.s);
     }
     
+    public boolean identical(Method o){
+        return this.s.identicalParams(o.s) && this.s.returnValue.equals(o.s.returnValue);
+    }
+    
     /**
      * In case the argument is also an instance of Method class
      * equals returns true if the signatures are also equals and false otherwise.
@@ -163,6 +169,7 @@ public class Method extends Type{
      */
     @Override
     public boolean equals(Object o){
+        if(o == this) return true;
         if(o == null) return false;
         if(o instanceof Method){
             Method m = (Method)o;

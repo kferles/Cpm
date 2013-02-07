@@ -1055,7 +1055,6 @@ translation_unit
 external_declaration
 //options {k=1;}
 	: namespace_definition
-	//| (/*!!!*/nested_name_id '::' declarator[null] '{') => extern_method_definition
 	| ( declaration_specifiers declarator '{' )=> function_definition
 	| declaration
 	;
@@ -1147,6 +1146,9 @@ scope{
 	| line_marker
 	;
 
+/*
+ * TODO: check if findInnerNamespace must be invoked.
+ */
 using_directive
 scope{
 	Namespace currUsing;
@@ -1451,6 +1453,10 @@ scope{
 	;
 
 init_declarator [String error, Type data_type, InClassDeclSpec class_specs] returns [Type declType]
+scope{
+	boolean isExternDef;
+	DefinesNamespace namespace; 
+}
 scope declarator_strings;
 scope decl_infered;
 scope decl_id_info;
@@ -1458,12 +1464,34 @@ scope decl_id_info;
 	$declarator_strings::dir_decl_identifier = null;
 	$declarator_strings::dir_decl_error = $error;
 	$decl_infered::declarator = null;
+	$init_declarator::isExternDef = false;
+	$init_declarator::namespace = null;
 }
 	: declarator { not_null_decl_id($declarator_strings::dir_decl_identifier, $declarator_strings::dir_decl_error, $declarator.start) }? 
 	  (eq = '=' initializer)?
 	  {	//todo: error for typedef with initializer
+	  	//todo: typedef + extern def
+
+	  	boolean externDef = $init_declarator::isExternDef;
+	  	boolean isNameSpEnclosed = false;
+	  	boolean resultNotMethod = true;
+	  	DefinesNamespace nameSp = $init_declarator::namespace;
+		LookupResult res = null;
+		String id = $declarator_strings::dir_decl_identifier;
+
+		if(externDef){
+	  		DefinesNamespace curr_scope = this.symbolTable.getCurrentNamespace();
+
+			if(nameSp != null){
+	  			res = nameSp.lookup(id, curr_scope, false, true);
+	  			isNameSpEnclosed = nameSp.isEnclosedInNamespace(curr_scope);
+	  		}
+	  		
+		}
+
 	  	$declType = null;
 	  	if($declarator_strings::dir_decl_identifier != null){
+
 	  		DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
 		  	if($data_type != null){
 			  	String declarator_id = $declarator_strings::dir_decl_identifier;
@@ -1476,7 +1504,7 @@ scope decl_id_info;
 			  			this.insertSynonym(declarator_id, $data_type, id_line, id_pos, $class_specs);
 			  		}
 			  		else{
-		  				if($function_definition.size() == 0){
+		  				if($function_definition.size() == 0 && externDef == false){
 		  					this.insertField(declarator_id, $data_type, id_line, id_pos, $class_specs);
 		  				}
 			  		}
@@ -1503,12 +1531,13 @@ scope decl_id_info;
 					  			this.insertSynonym(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
 					  		}
 					  		else{
-				  				if($function_definition.size() == 0){
+				  				if($function_definition.size() == 0 && externDef == false){
 				  					this.insertField(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
 				  				}
 					  		}
 				  		}
 				  		else if(decl_inf_t.m_rv != null){
+				  			resultNotMethod = false;
 				  			System.out.println(decl_inf_t.m_rv.toString(declarator_id));
 				  			$declType = decl_inf_t.m_rv;
 				  			if(($struct_union_or_class_definition.size() > 0 && $class_declaration_list.size() == 0) ||
@@ -1533,12 +1562,89 @@ scope decl_id_info;
 						  			this.insertSynonym(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
 						  		}
 						  		else{
+						  			if(externDef && res != null){
+							  			MemberElementInfo<Method> mRes = null;
+
+								  		try{
+							  				mRes = res.isResultMethod(decl_inf_t.m_rv, nameSp);
+							  			}
+							  			catch(AmbiguousReference ambiguous){
+							  				yield_error(ambiguous.getRefError(), true);
+	  										System.err.print(ambiguous.getMessage());
+							  			}
+							  			catch(AccessSpecViolation accessViol){
+							  				/*
+							  				 * impossible, beacause ignore_access is set to true
+							  				 */
+							  			}
+							  			catch(NotMatchingPrototype noMatch){
+							  				yield_error(noMatch.getMessage(), id_line, id_pos);
+							  				System.err.print(noMatch.makeMessage());
+							  			}
+							  			
+							  			if(mRes != null){
+							  				Method m = mRes.getElement();
+							  				if(!m.isDefined()){
+							  					if($function_definition.size() > 0){
+							  						if(isNameSpEnclosed){
+							  							m.setIsDefined();
+							  						}
+							  						else{
+							  							String methFullName = SymbolTable.getFieldsFullName(nameSp, id);
+							  							this.yield_error("error: definition of '" + m.toString(methFullName) + "' is not in namespace enclosing '"
+							  									 + nameSp + "'" ,
+							  									 id_line,
+							  									 id_pos);
+							  						}
+							  					}
+							  					else{
+							  						String methFullName = SymbolTable.getFieldsFullName(nameSp, id);
+							  						this.yield_error("error: declaration of '" + m.toString(methFullName) + "' outside of class is not definition",
+							  								  id_line, id_pos);
+							  					}
+							  				}
+											else{
+												if($function_definition.size() > 0){
+													if(!isNameSpEnclosed){
+														String methFullName = SymbolTable.getFieldsFullName(nameSp, id);
+							  							this.yield_error("error: definition of '" + m.toString(methFullName) + "' is not in namespace enclosing '"
+							  									 + nameSp + "'" ,
+							  									 id_line,
+							  									 id_pos);
+													}
+													String methFullName = SymbolTable.getFieldsFullName(nameSp, id);
+													Redefinition redef = new Redefinition(methFullName, decl_inf_t.m_rv, id_line, id_pos,
+																	      m, mRes.getFileName(), mRes.getLine(), mRes.getPos());
+													this.yield_error(redef.getMessage(), true);
+                											this.yield_error(redef.getFinalError(), false);
+												}
+												else{
+													String methFullName = SymbolTable.getFieldsFullName(nameSp, id);
+							  						this.yield_error("error: declaration of '" + m.toString(methFullName) + "' outside of class is not definition",
+							  								  id_line, id_pos);
+												}
+											}
+							  			}
+							  			else{
+							  				externDef = false;
+							  			}
+								  	}
+								  	else if (externDef && res == null){
+								  		externDef = false;
+								  	}
 					  				//if(this.symbolTable.isCurrentNamespaceClass() == true){
 					  				if($function_definition.size() > 0){
 					  					decl_inf_t.m_rv.setIsDefined();
 					  					$function_definition::methods_type = decl_inf_t.m_rv;
 					  				}
-					  				this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+					  				
+					  				/*
+					  				 * TODO: check if a fuction (not a pointer to function) is 
+					  				 * a parameter to another function
+					  				 */
+					  				if(!externDef){
+					  					this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+					  				}
 						  		}
 					  		}
 				  			
@@ -1558,6 +1664,81 @@ scope decl_id_info;
 				  		}
 			  		}
 			  	}
+			  	
+			  	if(externDef && resultNotMethod && res != null && $declType != null){
+	  				MemberElementInfo<? extends Type> fld = null;
+	
+					try{
+		  				fld = res.isResultField();
+		  			}
+		  			catch(AmbiguousReference ambiguous){
+		  				yield_error(ambiguous.getRefError(), true);
+						System.err.print(ambiguous.getMessage());
+		  			}
+		  			catch(AccessSpecViolation accessViol){
+		  				/*
+		  				 * impossible, beacause ignore_access is set to true
+		  				 */
+		  			}
+
+		  			String fieldsFullName = SymbolTable.getFieldsFullName(nameSp, declarator_id);
+		  			if(fld != null){
+		  				//check if it is defined and that the defered is identical to the one inside the namespace ...
+		  				//only for class fileds, for namespaces and others probalbly produce an error ...
+		  				
+		  				if(!isNameSpEnclosed){
+		  					this.yield_error("error: definition of '" + fld.getElement().toString(fieldsFullName) + "' is not in namespace enclosing '"
+	 									 + nameSp + "'" ,
+	 									 id_line,
+	 									 id_pos);
+		  				}
+		  				if($declType.equals(fld.getElement())){
+		  					if(fld.isClassMember()){
+		  						if(fld.isStatic()){
+			  						if(fld.isDefined()){
+			  							Redefinition redef = new Redefinition(fieldsFullName, $declType, id_line, id_pos,
+			  													      fld.getElement(), fld.getStaticDefFile(),
+			  													      fld.getStaticDefLine(), fld.getStaticDefPos());
+			  							this.yield_error(redef.getMessage(), true);
+	             										this.yield_error(redef.getFinalError(), false);
+			  						}
+			  						else{
+			  							fld.defineStatic(id_line, id_pos, this.preproc.getCurrentFileName());
+			  						}
+		  						}
+		  						else{
+		  							this.yield_error("error: '" + fld.getElement().toString(fieldsFullName) + "' is not a static member of '" + nameSp + "'",
+		  									 id_line, id_pos);
+		  						}
+		  					}
+		  					else{
+		  						Redefinition redef = new Redefinition(fieldsFullName, $declType, id_line, id_pos,
+			  											      fld.getElement(), fld.getStaticDefFile(),
+			  											      fld.getStaticDefLine(), fld.getStaticDefPos());
+	  							this.yield_error(redef.getMessage(), true);
+	     									this.yield_error(redef.getFinalError(), false);
+		  					}
+		  				}
+		  				else{
+	  						ConflictingDeclaration conflict = new ConflictingDeclaration(fieldsFullName, $declType, fld.getElement(), id_line, id_pos,
+	  																	fld.getFileName(), fld.getLine(),
+	  																	fld.getPos());
+							this.yield_error(conflict.getMessage(), true);
+							this.yield_error(conflict.getFinalError(), false);
+		  				}
+		  			}
+		  			else{
+		  				if(nameSp instanceof CpmClass){
+		  					this.yield_error("error: '" + $declType.toString(fieldsFullName) + "' is not a static member of '" + nameSp + "'",
+		  							 id_line, id_pos);
+		  				}
+		  				else{
+		  					this.yield_error("error: '" + $declType.toString(fieldsFullName) + "' should have been declared inside '" + nameSp + "'",
+		  							 id_line, id_pos);
+		  				}
+		  			
+		  			}
+	  			}
 		  	}
 		  	else if($declarator_strings::dir_decl_error == null && decl_inf_t != null && decl_inf_t.m_pend != null){
 		  		this.yield_error("error: C+- forbids declaration of '" + $declarator_strings::dir_decl_identifier + "' with no type",
@@ -1947,7 +2128,7 @@ scope normal_mode_fail_level;
 			try{
 				t = symbolTable.getNamedTypeFromNestedNameId(chain, false, false, true);
 			}
-			catch(Exception _){
+			catch(ErrorMessage _){ System.out.println("Here");
 				this.yield_error("error: qualified name does not name a class", line, pos);
 			}
 		}
@@ -2473,8 +2654,15 @@ scope{
 
 
 direct_declarator
-	:   (   /*nested_identifier -> nested_identifier
-		|*/ IDENTIFIER { $declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
+	:   (   nested_identifier
+		{
+			if($init_declarator.size() > 0){
+				$init_declarator::isExternDef = true;
+				$init_declarator::namespace = $nested_identifier.namespace;
+			}
+		}
+		-> nested_identifier
+		| IDENTIFIER { $declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
 			   if($parameter_declaration.size() > 0) $parameter_declaration::p.id = $IDENTIFIER.text;
 			   if($decl_id_info.size() > 0){
 			   	$decl_id_info::line = this.fixLine($IDENTIFIER);
@@ -2657,6 +2845,7 @@ scope{
 }
 scope declarator_strings;
 scope decl_infered;
+scope decl_id_info;
 @init{
 	$declarator_strings::dir_decl_identifier = null;
 	$declarator_strings::dir_decl_error = null;
@@ -3049,13 +3238,87 @@ jump_statement
 	
 //C+- aux rules (different rules to adjust C's syntax)
 
-nested_identifier
-	: '::'? IDENTIFIER nested_identifier_tail 
+nested_identifier returns [DefinesNamespace namespace]
+scope{
+  DefinesNamespace fromScope;
+  DefinesNamespace runner;
+}
+@init{
+	$namespace = null;
+}
+	: global_scope = '::'? IDENTIFIER
+	  {
+	  	DefinesNamespace currentScope = this.symbolTable.getCurrentNamespace();
+	  	$nested_identifier::fromScope = currentScope;
+	  	DefinesNamespace runner = null;
+	  	String id = $IDENTIFIER.text;
+	  	try{
+		  	if($global_scope == null){
+		  		runner = currentScope.findNamespace(id, currentScope, true);
+		  	}
+		  	else{
+		  		runner = this.symbolTable.findInnerNamespace(id, currentScope, true);
+		  	}
+	  	}
+	  	catch(AmbiguousReference ambiguous){
+	  		ambiguous.referenceTypeError(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
+		  	yield_error(ambiguous.getRefError(), true);
+			System.err.print(ambiguous.getMessage());
+			//yield_error(ambiguous.getLastLine(), true);
+	  	}
+	  	catch(AccessSpecViolation access_viol){
+	  		yield_error(access_viol.getMessage(), false);
+		  	yield_error(access_viol.getContextError(), true);
+	  	}
+	  	catch(InvalidScopeResolution invalid){
+	  		yield_error(invalid.getMessage(), true);
+	  	}
+	  	
+	  	$nested_identifier::runner = runner;
+	  }
+	  '::' nested_identifier_tail
+	  {
+	  	$namespace = $nested_identifier::runner;
+	  }
 	;
 	
 nested_identifier_tail
-	: '::' IDENTIFIER nested_identifier_tail
-	|
+	: IDENTIFIER
+	  {
+	  	if($nested_identifier::runner != null){
+	  		DefinesNamespace next = null;
+		  	try{
+		  		String id = $IDENTIFIER.text;
+		  		next = $nested_identifier::runner.findInnerNamespace(id, $nested_identifier::fromScope, true);
+		  	}
+		  	catch(AmbiguousReference ambiguous){ //System.out.println("HERE " + ambiguous.getRefError());
+		  		ambiguous.referenceTypeError(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
+			  	yield_error(ambiguous.getRefError(), true);
+				System.err.print(ambiguous.getMessage());
+				//yield_error(ambiguous.getLastLine(), true);
+		  	}
+		  	catch(AccessSpecViolation access_viol){
+		  		yield_error(access_viol.getMessage(), false);
+			  	yield_error(access_viol.getContextError(), true);
+		  	}
+		  	catch(InvalidScopeResolution invalid){
+		  		yield_error(invalid.getMessage(), true);
+		  	}
+		  	$nested_identifier::runner = next;
+	  	}
+	  }
+	  '::' nested_identifier_tail
+	| IDENTIFIER
+	  {
+	  	$declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
+		if($parameter_declaration.size() > 0) $parameter_declaration::p.id = $IDENTIFIER.text;
+		if($decl_id_info.size() > 0){ System.out.println($IDENTIFIER.text);
+			$decl_id_info::line = this.fixLine($IDENTIFIER);
+			$decl_id_info::pos = $IDENTIFIER.pos;
+		}
+
+		direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error);
+	  }
 	;
 	
 //Preprocessor
@@ -3124,8 +3387,8 @@ line_marker_flags
 	  
 	  -> ^(DECIMAL_LITERAL line_marker_flags)
 	| DECIMAL_LITERAL
-	  {
-	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
+		  {
+		  	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
 	  	if(flag == 1) $line_marker::is_enter = true;
 	  	else if(flag == 2) $line_marker::is_exit = true;
 	  	else if(flag == 3) $line_marker::is_stl_header = true;

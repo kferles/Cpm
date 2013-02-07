@@ -30,4 +30,8 @@ public interface DefinesNamespace {
     
     public DefinesNamespace findInnerNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference, InvalidScopeResolution;
     
+    public  LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access);
+    
+    public boolean isEnclosedInNamespace(DefinesNamespace namespace);
+    
 }

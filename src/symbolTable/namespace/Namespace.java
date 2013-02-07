@@ -43,8 +43,9 @@ public class Namespace implements DefinesNamespace{
                                    List<TypeDefinition> typeAgr,
                                    List<Namespace> namespaceAgr,
                                    List<NamespaceElement<? extends Type>> fieldArg,
-                                   List<NamespaceElement<Method>> methAgr,
-                                   Namespace firstNamespace) {
+                                   List<Map<Method.Signature, ? extends MemberElementInfo<Method>>> methAgr,
+                                   Namespace firstNamespace,
+                                   boolean searchInSupers) {
         
         if(visited.contains(this) == true) return;
         
@@ -67,18 +68,14 @@ public class Namespace implements DefinesNamespace{
             fieldArg.add(tElem);
         }
         else if(this.methods != null && this.methods.containsKey(name) == true){
-            HashMap<Method.Signature, NamespaceElement<Method>> meths = this.methods.get(name);
-            
-            for(NamespaceElement<Method> meth : meths.values()){
-                methAgr.add(meth);
-            }
+            methAgr.add(this.methods.get(name));
         }
         
         if((typeAgr.isEmpty() == false || namespaceAgr.isEmpty() == false || fieldArg.isEmpty() == false || methAgr.isEmpty() == false) && this == firstNamespace) return;
         
-        if(this.usingDirectives != null){
+        if(this.usingDirectives != null && searchInSupers == true){
             for(Namespace namSpace : this.usingDirectives){
-                namSpace.findAllCandidates(name, from_scope, visited, typeAgr, namespaceAgr, fieldArg, methAgr, firstNamespace);
+                namSpace.findAllCandidates(name, from_scope, visited, typeAgr, namespaceAgr, fieldArg, methAgr, firstNamespace, true);
             }
         }
     }
@@ -146,6 +143,44 @@ public class Namespace implements DefinesNamespace{
                 hash = 59 * hash + this.line;
                 hash = 59 * hash + this.pos;
                 return hash;
+            }
+
+            @Override
+            public boolean isStatic() {
+                /*
+                 * Everything is considered static
+                 */
+                return true;
+            }
+
+            @Override
+            public boolean isClassMember() {
+                return false;
+            }
+
+            @Override
+            public boolean isDefined() {
+                return true;
+            }
+
+            @Override
+            public void defineStatic(int defLine, int defPos, String defFilename) {
+                throw new UnsupportedOperationException("Definition of a static namespace element is the declaration point.");
+            }
+
+            @Override
+            public int getStaticDefLine() {
+                return this.getLine();
+            }
+
+            @Override
+            public int getStaticDefPos() {
+                return this.getPos();
+            }
+
+            @Override
+            public String getStaticDefFile() {
+                return this.getFileName();
             }
             
         }
@@ -442,41 +477,22 @@ public class Namespace implements DefinesNamespace{
     }
 
     @Override
-    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AmbiguousReference {
-        TypeDefinition rv = null;
-        int typeResSize, fldResSize, namespaceResSize;
-        List<TypeDefinition> candidatesTypes = new ArrayList<TypeDefinition>();
-        List<NamespaceElement<? extends Type>> candidateFields = new ArrayList<NamespaceElement<? extends Type>>();
-        List<NamespaceElement<Method>> candidateMethods = new ArrayList<NamespaceElement<Method>> ();
-        List<Namespace> candidateNamespaces = new ArrayList<Namespace>();
-
-        this.findAllCandidates(name,
-                               from_scope,
-                               new HashSet<Namespace>(),
-                               candidatesTypes,
-                               candidateNamespaces,
-                               candidateFields,
-                               candidateMethods,
-                               this);
-
-        typeResSize = candidatesTypes.size();
-        fldResSize = candidateFields.size();
-        namespaceResSize = candidateNamespaces.size();
+    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AmbiguousReference, AccessSpecViolation {
+        TypeDefinition rv;
         
-        if(typeResSize + fldResSize + namespaceResSize > 1){
-            throw new AmbiguousReference(candidatesTypes, candidateNamespaces, candidateFields, candidateMethods, name);
-        }
-        else{
-            if(typeResSize == 1){
-                rv = candidatesTypes.get(0);
-            }
-        }
+        LookupResult res = this.lookup(name, from_scope, true, ignore_access);
+        
+       //res.checkForAmbiguity();
+        
+        rv = res.isResultType();
         
         return rv;
     }
     
     @Override
-    public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference, InvalidScopeResolution{
+    public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation,
+                                                                                                                  AmbiguousReference,
+                                                                                                                  InvalidScopeResolution{
         DefinesNamespace rv;
         rv = this.findInnerNamespace(name, from_scope, ignore_access);
         if(rv == null && this.belongsTo != null){
@@ -486,14 +502,15 @@ public class Namespace implements DefinesNamespace{
     }
     
     @Override
-    public DefinesNamespace findInnerNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) {
-        DefinesNamespace rv = null;
-        if(this.innerNamespaces != null && this.innerNamespaces.containsKey(name) == true){
-            rv = this.innerNamespaces.get(name).element;
-        }
-        else if(this.innerTypes != null && this.innerTypes.containsKey(name) == true){
-            rv = this.innerTypes.get(name).element;
-        }
+    public DefinesNamespace findInnerNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AmbiguousReference, 
+                                                                                                                       AccessSpecViolation,
+                                                                                                                       InvalidScopeResolution {
+        DefinesNamespace rv;
+        
+        LookupResult res = this.lookup(name, from_scope, true, ignore_access);
+        
+        rv = res.doesResultDefinesNamespace();
+        
         return rv;
     }
     
@@ -510,6 +527,56 @@ public class Namespace implements DefinesNamespace{
     @Override
     public String getName(){
         return this.name;
+    }
+    
+    @Override
+    public LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
+        List<TypeDefinition> candidatesTypes = new ArrayList<TypeDefinition>();
+        List<NamespaceElement<? extends Type>> candidateFields = new ArrayList<NamespaceElement<? extends Type>>();
+        List<Map<Method.Signature, ? extends MemberElementInfo<Method>>> candidateMethods = new ArrayList<Map<Method.Signature, 
+                                                                                                              ? extends MemberElementInfo<Method>>> ();
+        List<Namespace> candidateNamespaces = new ArrayList<Namespace>();
+
+        this.findAllCandidates(name,
+                               from_scope,
+                               new HashSet<Namespace>(),
+                               candidatesTypes,
+                               candidateNamespaces,
+                               candidateFields,
+                               candidateMethods,
+                               this,
+                               true);
+        
+        return new LookupResult(name, candidatesTypes, candidateNamespaces, candidateFields, candidateMethods, null, null, ignore_access);
+    }
+    
+    @Override
+    public boolean isEnclosedInNamespace(DefinesNamespace namespace){
+        boolean rv = false;
+        
+        DefinesNamespace curr = this.belongsTo;
+        while(curr != null){
+            if(curr == namespace){
+                rv = true;
+                break;
+            }
+            curr = curr.getParentNamespace();
+        }
+        
+        return rv;
+    }
+    
+    private DefinesNamespace isNameSpace(TypeDefinition n_type) throws InvalidScopeResolution {
+        DefinesNamespace rv = null;
+        if(n_type != null){
+            if(n_type instanceof DefinesNamespace){
+                rv = (DefinesNamespace)n_type;
+            }
+            else{
+                throw new InvalidScopeResolution(); //change this to invalid use of ::
+            }
+        }
+        return rv;
     }
     
     public void insertUsingDirective(Namespace nm){
