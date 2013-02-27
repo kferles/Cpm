@@ -1,4 +1,5 @@
-/** ANSI C ANTLR v3 grammar
+/*
+ ANSI C ANTLR v3 grammar
 
 Translated from Jutta Degener's 1995 ANSI C yacc grammar by Terence Parr
 July 2006.  The lexical rules were taken from the Java grammar.
@@ -49,6 +50,39 @@ tokens{
 	INCR_POSTFIX;
 	DECR_POSTFIX;
 	INITIALIZER_LIST;
+	NESTED_IDENTIFIER;
+	RETURN_EXP;
+	FOR_STMT;
+	FOR_BODY;
+	DO_WHILE_STMT;
+	DO_WHILE_BODY;
+	WHILE_COND;
+	WHILE_BODY;
+	IF_STMT;
+	IF_ELSE_STMT;
+	SWITCH_STMT;
+	ELSE_PRT;
+	COMP_STMT;
+	CASE_STMT;
+	DEFAULT_STMT;
+	CASE_SLCT;
+	LINE_MARKER_ENTER;
+	LINE_MARKER_EXIT;
+	USING_DIRECTIVE;
+	TYPE_NAME;
+	SPEC_QUAL_LIST;
+	NEW_TYPE_ID;
+	EXPRESSION_LIST;
+	NEW_INITIALIZER;
+	CONSTRUCTOR;
+	DESTRUCTOR;
+	METHOD;
+	NAMESPACE;
+	STR_UN_CLASS_DEFINITION;
+	EXTERN_CLASS_DEFINITION;
+	ENUM_DEFINITION;
+	ID_EXPRESSION;
+	FWD_DECLARATION;
 }
 
 scope Type_Spec{
@@ -174,8 +208,6 @@ import treeNodes4antlr.*;
 	}
 
 	public void displayRecognitionError(String[] tokenNames, RecognitionException e) {
-		//Change line number in error reporting HERE !!!!
-		//System.out.println(e.input.getSourceName());
 		//ugly, ugly ... But there is no obvious way to avoid it
 		if(this.pending_undeclared_err == null &&
 		   this.pending_ambiguous == null &&
@@ -213,7 +245,6 @@ import treeNodes4antlr.*;
 		if(pending_access_viol != null){
 			AccessSpecViolation temp = pending_access_viol;
 			pending_access_viol = null;
-			yield_error(temp.getMessage(), false);
 		  	return temp.getContextError();
 		}
 		return super.getErrorMessage(e, tokenNames);
@@ -636,13 +667,13 @@ import treeNodes4antlr.*;
 		}
 		catch(AccessSpecViolation access_viol){
 			//if chain size is 1 the error must be pending
-			if(chain.size() > 1){
-		  		yield_error(access_viol.getMessage(), false);
-		  		yield_error(access_viol.getContextError(), true);
-	  		}
-	  		else{
-	  			this.pending_access_viol = access_viol;
-	  		}
+			//if(chain.size() > 1){
+		  	//	yield_error(access_viol.getMessage(), false);
+		  	//	yield_error(access_viol.getContextError(), true);
+	  		//}
+	  		//else{
+	  		this.pending_access_viol = access_viol;
+	  		//}
 
 	  	}
 	  	catch(AmbiguousReference ambiguous){
@@ -1033,7 +1064,6 @@ import treeNodes4antlr.*;
 
 @synpredgate{ this.state.backtracking == 0 && this.normal_mode == true }
 
-
 translation_unit
 	: external_declaration+
 	;
@@ -1060,6 +1090,9 @@ external_declaration
 	;
 
 namespace_definition
+scope{
+	Namespace nmsp;
+}
 scope normal_mode_fail_level;
 @init{
 	$normal_mode_fail_level::failed = false;
@@ -1071,6 +1104,9 @@ scope normal_mode_fail_level;
 	  	_namespace.setLineAndPos(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
 	  	_namespace.setFileName(this.preproc.getCurrentFileName());
 	  	_namespace = this.insertNamespace(name, _namespace);
+	  	
+	  	$namespace_definition::nmsp = _namespace;
+	  	
 	  	if(_namespace != null){
 	  		this.symbolTable.setCurrentScope(_namespace);
 	  		this.symbolTable.setCurrentAccess(null);
@@ -1085,10 +1121,8 @@ scope normal_mode_fail_level;
   	  	this.symbolTable.endScope();
   	  }
 	   turn_on_normal_mode
-	;
-	
-extern_method_definition
-	: type_specifier nested_name_id '::' declarator compound_statement
+	   
+	   -> ^(NAMESPACE<NamespaceToken>[$namespace_definition::nmsp] external_declaration*)
 	;
 	
 function_definition
@@ -1123,6 +1157,8 @@ scope parameters_id;
 	  	}
 	  } //here and in constructor, error if identifiers are missing ...
 	  compound_statement turn_on_normal_mode	// ANSI style only
+
+	  -> ^(METHOD<MethodToken>[$function_definition::methods_type] compound_statement)
 	;
 
 declaration
@@ -1136,13 +1172,14 @@ scope{
 @after {
   this.resetErrorMessageAuxVars();
 }
-	: (struct_union_or_class IDENTIFIER ':' 'public') => struct_union_or_class_definition ';'  //-> ^(DECL {new CommonTree((CommonTree)$struct_union_or_class_definition.tree)})
-	| (struct_union_or_class IDENTIFIER '{') => struct_union_or_class_definition ';'
-	| (struct_union_or_class nested_name_id ':' 'public') => extern_class_definition ';'
-	| (struct_union_or_class nested_name_id '{') => extern_class_definition ';'
-	|'typedef' { $declaration::isTypedef = true; } simple_declaration ';'
+	: ('typedef'? struct_union_or_class IDENTIFIER ':' 'public') => t='typedef'? { if($t != null) $declaration::isTypedef = true; } struct_union_or_class_definition ';'!
+	| ('typedef'? struct_union_or_class IDENTIFIER '{') => t='typedef'? { if($t != null) $declaration::isTypedef = true; } struct_union_or_class_definition ';'!
+	| ('typedef'? struct_union_or_class nested_name_id ':' 'public') => t='typedef'? { if($t != null) $declaration::isTypedef = true; } extern_class_definition ';'!
+	| ('typedef'? struct_union_or_class nested_name_id '{') => t='typedef'? { if($t != null) $declaration::isTypedef = true; } extern_class_definition ';'!
+	| t='typedef'? enum_definition ';'!
+	| 'typedef' { $declaration::isTypedef = true; } simple_declaration ';'!
 	| simple_declaration ';'!
-	| using_directive ';'
+	| using_directive ';'!
 	| line_marker
 	;
 
@@ -1202,6 +1239,7 @@ scope{
 	   	}
 	   }
 	}
+	-> USING_DIRECTIVE<UsingDirectiveToken>[$using_directive::finalNamespace]
 	;
 
 using_directive_tail [Namespace currentNamespace, DefinesNamespace currentScope]
@@ -1269,27 +1307,37 @@ scope{
 	  }
 	;
 
+/*
+ * TODO: declaration_specifiers ? //for constructors and destructor defs ...
+ */
 simple_declaration
 scope{
 	boolean possible_fwd_decl;
+	boolean isFwdDecl;
 	SymbolTable.NestedNameInfo inf;
 	String tag;
-	boolean isEnumDef;
 	String enumId;
+	String declSpecError;
+	Type declSpecT;
+	InClassDeclSpec declSpecs;
 }
 @init{
 	$simple_declaration::possible_fwd_decl = false;
 	$simple_declaration::inf = null;
 	$simple_declaration::tag = null;
-	$simple_declaration::isEnumDef = false;
-	$simple_declaration::enumId = null;
 }
  	:
-	  declaration_specifiers!
-	  decl_list = init_declarator_list[$declaration_specifiers.error != null ? $declaration_specifiers.error + $declaration_specifiers.init_decl_err : null,
-	  				   $declaration_specifiers.t,
-	  				   $declaration_specifiers.class_specs]?
+	  declaration_specifiers
 	  {
+	  	$simple_declaration::declSpecError = $declaration_specifiers.error != null ? $declaration_specifiers.error + $declaration_specifiers.init_decl_err : null;
+	  	$simple_declaration::declSpecT = $declaration_specifiers.t;
+	  	$simple_declaration::declSpecs = $declaration_specifiers.class_specs;
+	  }
+	  decl_list = init_declarator_list[$simple_declaration::declSpecError,
+	  				   $simple_declaration::declSpecT,
+	  				   $simple_declaration::declSpecs]?
+	  {
+	      $simple_declaration::isFwdDecl = $declaration_specifiers.isFwdDecl;
 	      if($decl_list.tree == null){
 	      	  if($declaration_specifiers.isFwdDecl == false){
 	      	  	if($simple_declaration::possible_fwd_decl == true && $declaration_specifiers.t != null){
@@ -1302,6 +1350,7 @@ scope{
 	  			_class.setLineAndPos($simple_declaration::inf.getLine(),
 	  					     $simple_declaration::inf.getPos());
 	  			this.insertClass(name, _class);
+	  			$simple_declaration::isFwdDecl = true;
 	      	  	}
 	      	  	else{
 		      	  	if($declaration_specifiers.error != null){
@@ -1309,7 +1358,7 @@ scope{
 			      	  		    fixLine($declaration_specifiers.start),
 			      	  		    $declaration_specifiers.start.getCharPositionInLine());
 		      	  	}
-		      	  	else if($simple_declaration::isEnumDef == false){
+		      	  	else{
 		      	  		this.yield_error("error: declaration does not declare anything", 
 		      	  			    fixLine($declaration_specifiers.start),
 		      	  		    	    $declaration_specifiers.start.getCharPositionInLine());
@@ -1326,16 +1375,15 @@ scope{
 	      	  			    fixLine($declaration_specifiers.start),
 	      	  			    $declaration_specifiers.start.getCharPositionInLine());
 	      	  	}
-	      	  	
-	      	  	if($simple_declaration::isEnumDef == true){
-	      	  	
-	      	  	}
 	      	  }
 	      }
 	  }
+	  -> {$simple_declaration::isFwdDecl && $init_declarator_list.tree == null}? FWD_DECLARATION<FwdDeclarationToken>[$declaration_specifiers.t]
+	  -> {$simple_declaration::isFwdDecl && $init_declarator_list.tree != null}? ^(FWD_DECLARATION<FwdDeclarationToken>[$declaration_specifiers.t] init_declarator_list)
+	  -> init_declarator_list
 	  ;
 	
-declaration_specifiers returns [Type t, boolean isFwdDecl, boolean hasQuals, String error, String init_decl_err, InClassDeclSpec class_specs, boolean isEnum]
+declaration_specifiers returns [Type t, boolean isFwdDecl, boolean hasQuals, String error, String init_decl_err, InClassDeclSpec class_specs]
 scope Type_Spec;
 scope cv_qual;
 scope storage_class_spec;
@@ -1467,8 +1515,9 @@ scope decl_id_info;
 	$init_declarator::isExternDef = false;
 	$init_declarator::namespace = null;
 }
-	: declarator { not_null_decl_id($declarator_strings::dir_decl_identifier, $declarator_strings::dir_decl_error, $declarator.start) }? 
-	  (eq = '=' initializer)?
+	: declarator { not_null_decl_id($declarator_strings::dir_decl_identifier, $declarator_strings::dir_decl_error, $declarator.start); } 
+	  (  eq = '=' initializer
+	   | lpar = '(' argument_expression_list ')' )?
 	  {	//todo: error for typedef with initializer
 	  	//todo: typedef + extern def
 
@@ -1541,21 +1590,13 @@ scope decl_id_info;
 				  			System.out.println(decl_inf_t.m_rv.toString(declarator_id));
 				  			$declType = decl_inf_t.m_rv;
 				  			if(($struct_union_or_class_definition.size() > 0 && $class_declaration_list.size() == 0) ||
-				  			    $extern_class_definition.size() > 0 ||
-				  			   ($simple_declaration.size() > 0 && $simple_declaration::isEnumDef == true) ){
-				  			   
+				  			    $extern_class_definition.size() > 0 || $enum_definition.size() > 0 ){
+
 				  			   	$init_declarator_list::newTinRv = true;
 				  			   	Token declaratorTok = $declarator.start;
 				  				this.yield_error("error: new types may not be defined in a return type",
 				  						 this.fixLine(declaratorTok),
 				  						 declaratorTok.getCharPositionInLine());
-
-				  				if($simple_declaration::isEnumDef == true){
-				  					this.yield_error("note: perhaps a semicolon is missing after the definition of '" + 
-				  							  $simple_declaration::enumId + "'",
-		      	  				 			 	this.fixLine(declaratorTok),
-		      	  				 				declaratorTok.getCharPositionInLine());
-				  				}
 				  			}
 				  			else{
 					  			if($declaration.size() > 0 && $declaration::isTypedef == true){
@@ -1748,12 +1789,13 @@ scope decl_id_info;
 	  	}
 	  }
 	  
-	  -> {$eq == null}? ^(DECLARATION<DeclarationToken>[$declType] declarator)
-	  -> ^(DECLARATION<DeclarationToken>[$declType] ^('=' declarator initializer))
+	  -> { $eq == null && $lpar == null }? ^(DECLARATION<DeclarationToken>[$declType] declarator)
+	  -> { $lpar == null }? ^(DECLARATION<DeclarationToken>[$declType] ^('=' declarator initializer))
+	  -> ^(DECLARATION<DeclarationToken>[$declType] argument_expression_list)
 	  //-> ^({new CommonToken(DECL, "DECL")} declarator)
 	  //-> ^(DECL declarator)
 	;
-	
+
 storage_class_specifier
 	: 'extern'
 	  {
@@ -2023,7 +2065,7 @@ struct_union_or_class_specifier
 		  			$simple_declaration::tag = $struct_union_or_class.start.getText();
 		  		}
 		  		else{
-		  			check_tags($struct_union_or_class.start.getText(), 
+		  			check_tags($struct_union_or_class.start.getText(),
 		  				   $Type_Spec::named_t,
 		  				   this.fixLine($struct_union_or_class.start),
 		  				   $struct_union_or_class.start.getCharPositionInLine());
@@ -2036,6 +2078,7 @@ struct_union_or_class_specifier
 struct_union_or_class_definition
 scope{
 	UserDefinedType t;
+	CpmClass _class;
 }
 scope collect_base_classes;
 scope normal_mode_fail_level;
@@ -2062,6 +2105,7 @@ scope normal_mode_fail_level;
 	  	$struct_union_or_class_definition::t = new UserDefinedType(_class, false, false);
 	  	_class.setLineAndPos(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
 	  	_class.setFileName(this.preproc.getCurrentFileName());
+	  	$struct_union_or_class_definition::_class = _class;
 	  	CpmClass current_class = this.insertClass(name, _class);
 	  	if(current_class != null){
 		  	this.symbolTable.setCurrentScope(_class);
@@ -2093,11 +2137,14 @@ scope normal_mode_fail_level;
   	  	}
   	  }
   	  turn_on_normal_mode
+  	  
+  	  -> ^(STR_UN_CLASS_DEFINITION<StrUnClassDefToken>[$struct_union_or_class_definition::_class] class_declaration_list? init_declarator_list?)
 	;
 	
 extern_class_definition
 scope{
 	UserDefinedType t;
+	CpmClass _class;
 }
 scope collect_base_classes;
 scope normal_mode_fail_level;
@@ -2128,7 +2175,7 @@ scope normal_mode_fail_level;
 			try{
 				t = symbolTable.getNamedTypeFromNestedNameId(chain, false, false, true);
 			}
-			catch(ErrorMessage _){ System.out.println("Here");
+			catch(ErrorMessage _){
 				this.yield_error("error: qualified name does not name a class", line, pos);
 			}
 		}
@@ -2193,6 +2240,8 @@ scope normal_mode_fail_level;
 			this.normal_mode = false;
 			$normal_mode_fail_level::failed = true;
 		}
+		
+		$extern_class_definition::_class = _class;
 	  }
 	 '{' class_declaration_list '}' 
 	  {
@@ -2209,8 +2258,97 @@ scope normal_mode_fail_level;
   	  	}
   	  }
   	  turn_on_normal_mode
+
+  	  -> ^(EXTERN_CLASS_DEFINITION<StrUnClassDefToken>[$extern_class_definition::_class] class_declaration_list? init_declarator_list?)
 	;
-	
+
+enum_definition
+scope{
+	InClassDeclSpec spec;
+	UserDefinedType enumeration;
+	SynonymType enum_def;
+}
+	: 'enum' IDENTIFIER
+	   {
+	  	Token idTok = $IDENTIFIER;
+	  	String name = idTok.getText();
+	  	int line = this.fixLine(idTok);
+	  	int pos = idTok.getCharPositionInLine();
+	  	$enum_definition::spec = new InClassDeclSpec(false, false, false);
+	  	SynonymType s_t = new SynonymType(idTok.getText(), this.symbolTable.getCurrentNamespace());
+	  	$enum_definition::enumeration = new UserDefinedType(s_t, true, false);
+	  	s_t.setLineAndPos(line, pos);
+	  	s_t.setFileName(this.preproc.getCurrentFileName());
+		$enum_definition::enum_def = s_t;
+		try{
+			this.symbolTable.insertInnerSyn(name, s_t);
+		}
+		catch(SameNameAsParentClass sameName){
+			this.yield_error(sameName.getMessage(), true);
+			$enum_definition::spec = null;
+			$enum_definition::enumeration = null;
+			s_t = null;
+		}
+                catch(ConflictingDeclaration conflict){
+                	this.yield_error(conflict.getMessage(), true);
+                	this.yield_error(conflict.getFinalError(), false);
+                	$enum_definition::spec = null;
+                	$enum_definition::enumeration = null;
+                	s_t = null;
+                }
+                catch(Redefinition redef){
+                	this.yield_error(redef.getMessage(), true);
+                	this.yield_error(redef.getFinalError(), false);
+                	$enum_definition::spec = null;
+                	$enum_definition::enumeration = null;
+                	s_t = null;
+                }
+                catch(DiffrentSymbol diffSymbol){
+                	this.yield_error(diffSymbol.getMessage(), true);
+                	this.yield_error(diffSymbol.getFinalError(), false);
+                	$enum_definition::spec = null;
+                	$enum_definition::enumeration = null;
+                	s_t = null;
+                }
+	  }
+	  '{' enumerator_list '}' init_declarator_list[null, $enum_definition::enumeration, new InClassDeclSpec(false, false, false)]?
+	  {
+  	  	if($init_declarator_list.tree != null && $init_declarator_list.newTypeInRv == true){
+  	  		
+  	  		Token idTok = $IDENTIFIER;
+  	  		this.yield_error("note: perhaps a semicolon is missing after the definition of '" + idTok.getText() + "'",
+  	  				 this.fixLine(idTok),
+  	  				 idTok.getCharPositionInLine());
+  	  	}
+  	  }
+  	  
+  	  -> ^(ENUM_DEFINITION<EnumDefinitionToken>[$enum_definition::enum_def] enumerator_list init_declarator_list?)
+	;
+
+enumerator_list
+	: 
+	{
+	   if(this.symbolTable.isCurrentNamespaceClass() == true){
+  		$enum_definition::spec.isStatic = true;
+  	   }
+	}
+	enumerator (',' enumerator)* -> enumerator+
+	;
+
+enumerator
+	: IDENTIFIER
+	  {
+	  	if($enum_definition::enumeration != null){
+		  	Token idTok = $IDENTIFIER;
+		  	String name = idTok.getText();
+		  	int line = this.fixLine(idTok);
+		  	int pos = idTok.getCharPositionInLine();
+		  	this.insertField(idTok.getText(), $enum_definition::enumeration, line, pos, $enum_definition::spec);
+	  	}
+	  }
+	  ('=' constant_expression)?
+	;
+
 turn_on_normal_mode
 @init{
 	if($normal_mode_fail_level::failed == true) this.normal_mode = true;
@@ -2306,28 +2444,49 @@ scope{
 	boolean declList;
 }
 	: class_content_element*
+	-> class_content_element*
 	;
 	
 class_content_element
-	: access_specifier ':'
+	: access_specifier ':'!
 	| (declaration_specifiers? declarator '{') => function_definition 
 	| in_class_declaration
 	;
 	
 constructor
-	: construcctor_head ';'
-	| construcctor_head 
-	  {$construcctor_head.m.setIsDefined();} 
-	  compound_statement
+//TODO: fix error message, when ctor_initializer is not with a constructor definition
+//	it's realy ugly ...
+	: construcctor_head ';' -> CONSTRUCTOR<ConstructorToken>[$construcctor_head.m]
+	| construcctor_head (':' ctor_initializer)?
+	  {$construcctor_head.m.setIsDefined();}
+	  compound_statement -> ^(CONSTRUCTOR<ConstructorToken>[$construcctor_head.m] ctor_initializer? compound_statement)
 	;
-	
+
+ctor_initializer
+	: mem_initializer_list
+	;
+
+mem_initializer_list
+	: mem_initializer
+	| mem_initializer c = ',' mem_initializer_list -> ^($c mem_initializer mem_initializer_list)
+	;
+
+mem_initializer
+	: mem_initializer_id '(' expression* ')'
+	;
+
+mem_initializer_id
+	: nested_identifier
+	| IDENTIFIER
+	;
+
 construcctor_head returns [Method m]
 scope parameters_id;
 @init{
 	$m = null;
 	$parameters_id::parameters_ids = null;
 }
-	: className '(' parameter_type_list? ')'
+	: exp = 'explicit'? className '(' parameter_type_list? ')'
 	  {
 	     try{
 	        ArrayList<Type> param = null;
@@ -2339,6 +2498,7 @@ scope parameters_id;
 	        } 
 	     
 	     	Method m1 = new Method(null, param, this.symbolTable.getCurrentNamespace(), false, false, false, false, hasVarArgs);
+	     	if($exp != null) m1.setExplicit();
 	     	$m = m1;
 	     	this.symbolTable.insertConstructor($m, this.fixLine(des_id), des_id.getCharPositionInLine());
 	     }
@@ -2350,17 +2510,17 @@ scope parameters_id;
 	;
 	
 destructor
-	: destructor_head ';' 
+	: destructor_head ';'  -> DESTRUCTOR<DestructorToken>[$destructor_head.m]
 	| destructor_head
 	  {$destructor_head.m.setIsDefined();}
-	  compound_statement
+	  compound_statement -> ^(DESTRUCTOR<DestructorToken>[$destructor_head.m] compound_statement)
 	;
 	
 destructor_head returns [Method m]
 @init{
 	$m = null;
 }
-	: '~'className '(' parameter_type_list? ')'
+	: virt = 'virtual'? '~'className '(' parameter_type_list? ')'
 	{
 	     try{
 		     Token des_id = $className.start;
@@ -2372,7 +2532,7 @@ destructor_head returns [Method m]
 		         * cast cannot fail because of the semantic predicate in the className rule
 		         */
 		     	CpmClass _class = (CpmClass) this.symbolTable.getCurrentNamespace();
-		     	Method m1 = new Method(null, null, _class, false, false, false, false, false);
+		     	Method m1 = new Method(null, null, _class, $virt == null ? false : true, false, false, false, false);
 			$m = m1;
 	     	     	_class.insertDestructor($m, this.symbolTable.getCurrentAccess(), this.fixLine(des_id), des_id.getCharPositionInLine());
 	
@@ -2450,10 +2610,6 @@ scope cv_qual;
              	}
            }
 	;
-inclass_function_definition
-	: specifier_qualifier_list declarator compound_statement
-	;
-
 
 class_declarator_list
 	: class_declarator (',' class_declarator)*
@@ -2465,63 +2621,9 @@ class_declarator
 	;
 
 enum_specifier
-options {k=3;}
-scope{
-	UserDefinedType enumeration;
-	InClassDeclSpec spec;
-}
+options { k=3;}
 	: //'enum' '{' enumerator_list '}'
-	  'enum' IDENTIFIER 
-	  {
-	  	$simple_declaration::isEnumDef = true;
-	  	$simple_declaration::enumId = $IDENTIFIER.text;
-	  	$Type_Spec::type[1] = true;
-	  	$Type_Spec::userDefinedCount++;
-	  	Token idTok = $IDENTIFIER;
-	  	String name = idTok.getText();
-	  	int line = this.fixLine(idTok);
-	  	int pos = idTok.getCharPositionInLine();
-	  	$enum_specifier::spec = new InClassDeclSpec(false, false, false);
-	  	SynonymType s_t = new SynonymType(idTok.getText(), this.symbolTable.getCurrentNamespace());
-	  	$enum_specifier::enumeration = new UserDefinedType(s_t, true, false);
-	  	s_t.setLineAndPos(line, pos);
-	  	s_t.setFileName(this.preproc.getCurrentFileName());
-		
-		try{
-			this.symbolTable.insertInnerSyn(name, s_t);
-		}
-		catch(SameNameAsParentClass sameName){
-			this.yield_error(sameName.getMessage(), true);
-			$enum_specifier::spec = null;
-			$enum_specifier::enumeration = null;
-			s_t = null;
-		}
-                catch(ConflictingDeclaration conflict){
-                	this.yield_error(conflict.getMessage(), true);
-                	this.yield_error(conflict.getFinalError(), false);
-                	$enum_specifier::spec = null;
-                	$enum_specifier::enumeration = null;
-                	s_t = null;
-                }
-                catch(Redefinition redef){
-                	this.yield_error(redef.getMessage(), true);
-                	this.yield_error(redef.getFinalError(), false);
-                	$enum_specifier::spec = null;
-                	$enum_specifier::enumeration = null;
-                	s_t = null;
-                }
-                catch(DiffrentSymbol diffSymbol){
-                	this.yield_error(diffSymbol.getMessage(), true);
-                	this.yield_error(diffSymbol.getFinalError(), false);
-                	$enum_specifier::spec = null;
-                	$enum_specifier::enumeration = null;
-                	s_t = null;
-                }
-
-                $Type_Spec::named_t = s_t;
-	  }
-	  '{' enumerator_list '}'
-	| t = 'enum' nested_name_id
+	  t = 'enum' nested_name_id
 	  {
 	  
 	  	TypeDefinition named_t = null;
@@ -2578,30 +2680,6 @@ scope{
 	  		$Type_Spec::error_inUserDefined = true;
 	  	}
 	  }
-	;
-
-enumerator_list
-	: 
-	{
-	   if(this.symbolTable.isCurrentNamespaceClass() == true){
-  		$enum_specifier::spec.isStatic = true;
-  	   }
-	}
-	enumerator (',' enumerator)*
-	;
-
-enumerator
-	: IDENTIFIER
-	  {
-	  	if($enum_specifier::enumeration != null){
-		  	Token idTok = $IDENTIFIER;
-		  	String name = idTok.getText();
-		  	int line = this.fixLine(idTok);
-		  	int pos = idTok.getCharPositionInLine();
-		  	this.insertField(idTok.getText(), $enum_specifier::enumeration, line, pos, $enum_specifier::spec);
-	  	}
-	  }
-	  ('=' constant_expression)?
 	;
 
 type_qualifier
@@ -2768,20 +2846,25 @@ pure_virt_method_specifier
 	;
 
 pointer [ArrayList<ptr_cv> pointers]
+scope{
+	ArrayList<ptr_cv> temp_ptrs;	//to avoid an antlr's bug 
+					//(could not recognize the pointers as a parameter)
+}
 scope cv_qual;
 @init{
 	this.cv_qual_at_init();
+	$pointer::temp_ptrs = $pointers;
 }
 	: '*' type_qualifier+ 
 	      {
 	      	 $pointers.add(new ptr_cv(($cv_qual::constCount != 0 ? true : false), ($cv_qual::volatileCount != 0 ? true : false)));
 	      }
-	      pointer[pointers]?
+	      pointer[$pointer::temp_ptrs]?
 	| '*'
 	  {
 	  	$pointers.add(new ptr_cv(false, false));
 	  }
-	  pointer[pointers]
+	  pointer[$pointer::temp_ptrs]
 	| '*' { $pointers.add(new ptr_cv(false, false)); }
 	;
 
@@ -2914,10 +2997,6 @@ scope decl_id_info;
 	  }
 	;
 
-identifier_list
-	: IDENTIFIER (',' IDENTIFIER)*
-	;
-
 type_name [String id] returns [Type tp]
 scope declarator_strings;
 scope decl_infered;
@@ -2980,6 +3059,7 @@ scope decl_infered;
 	  		}
 	  	}
 	  }
+	  -> TYPE_NAME<TypeNameToken>[$id, $tp]
 	;
 
 abstract_declarator
@@ -3037,95 +3117,18 @@ initializer_list
 	;
 
 // E x p r e s s i o n s
-
-argument_expression_list
-	:   assignment_expression (',' assignment_expression)*
-	;
-
-additive_expression
-	: (multiplicative_expression) ('+'^ multiplicative_expression | '-'^ multiplicative_expression)*
-	;
-
-multiplicative_expression
-	: (cast_expression) ('*'^ cast_expression | '/'^ cast_expression | '%'^ cast_expression)*
-	;
-
-cast_expression
-	: '(' type_name["type name"] ')' cast_expression
-	| unary_expression
-	;
-
-unary_expression
-	: postfix_expression
-	| '++' unary_expression
-	| '--' unary_expression
-	| unary_operator cast_expression
-	| 'sizeof' '(' type_name["type name"] ')'
-	| 'sizeof' unary_expression
-	;
-
-postfix_expression
-	:   (primary_expression -> primary_expression)
-        (   '[' expression ']'
-      	     -> ^(INDEX $postfix_expression expression)
-        |   '(' argument_expression_list? ')'
-            -> ^(CALL $postfix_expression argument_expression_list?)
-        |   '.' IDENTIFIER
-            -> ^(OBJ_ACCESS $postfix_expression nested_name_id)
-        |   '->' nested_name_id
-            -> ^(PTR_ACCESS $postfix_expression nested_name_id)
-        |   '++'
-            -> ^(INCR_POSTFIX $postfix_expression)
-        |   '--'
-            -> ^(DECR_POSTFIX $postfix_expression)
-        )*
-	;
-
-unary_operator
-	: '&'
-	| '*'
-	| '+'
-	| '-'
-	| '~'
-	| '!'
-	;
-
-constant
-    :   HEX_LITERAL
-    |   OCTAL_LITERAL
-    |   DECIMAL_LITERAL
-    |	CHARACTER_LITERAL
-    |	STRING_LITERAL
-    |   FLOATING_POINT_LITERAL
-    ;
-    
-primary_expression
-	: constant
-	| nested_name_id
-	| 'this'
-	| '(' expression ')'
-	;
-
  
 expression
 	: assignment_expression (',' assignment_expression)*
 	;
 
-constant_expression
-	: conditional_expression
-	;
-
 assignment_expression
-	: lvalue assignment_operator assignment_expression -> ^(assignment_operator lvalue assignment_expression)
+	: logical_or_expression assignment_operator assignment_expression -> ^(assignment_operator logical_or_expression assignment_expression)
 	| conditional_expression
 	;
 
-new_exp
-	: 'new' nested_name_id ('('argument_expression_list?')')?
-	;
-
-lvalue
-	: unary_expression
+constant_expression
+	: conditional_expression
 	;
 
 assignment_operator
@@ -3143,9 +3146,9 @@ assignment_operator
 	;
 
 conditional_expression
-	: logical_or_expression (tern = '?' expression semi = ':' conditional_expression)? // a bit diffrent in C++
+	: logical_or_expression (tern = '?' expression semi = ':' assignment_expression)? // the assignment_expression if from C++'s bnf ...
 	
-	-> {$tern != null}? ^($tern logical_or_expression ^($semi expression conditional_expression))
+	-> {$tern != null}? ^($tern logical_or_expression ^($semi expression assignment_expression))
 	-> logical_or_expression
 	;
 
@@ -3182,6 +3185,184 @@ shift_expression
 	: additive_expression (('<<'|'>>')^ additive_expression)*
 	;
 
+additive_expression
+	: (multiplicative_expression) ('+'^ multiplicative_expression | '-'^ multiplicative_expression)*
+	;
+
+multiplicative_expression
+	: (cast_expression) ('*'^ cast_expression | '/'^ cast_expression | '%'^ cast_expression)*
+	;
+
+cast_expression
+	: '('! type_name["type name"] ')'! cast_expression
+	| unary_expression
+	;
+
+unary_expression
+	: postfix_expression
+	| '++' cast_expression
+	| '--' cast_expression
+	| unary_operator cast_expression
+	| 'sizeof' '('! type_name["type name"] ')'!
+	| 'sizeof' unary_expression
+	| new_expression
+	| delete_expression
+	;
+	
+postfix_expression
+	:   (primary_expression -> primary_expression)
+        (   '[' expression ']'
+      	     -> ^(INDEX $postfix_expression expression)
+        |   '(' argument_expression_list? ')'
+            -> ^(CALL $postfix_expression argument_expression_list?)
+        |   '.' IDENTIFIER
+            -> ^(OBJ_ACCESS $postfix_expression nested_name_id)
+        |   '->' nested_name_id
+            -> ^(PTR_ACCESS $postfix_expression nested_name_id)
+        |   '++'
+            -> ^(INCR_POSTFIX $postfix_expression)
+        |   '--'
+            -> ^(DECR_POSTFIX $postfix_expression)
+        )*
+	;
+
+argument_expression_list
+	:   assignment_expression (',' assignment_expression)*
+	;
+
+unary_operator
+	: '&'
+	| '*'
+	| '+'
+	| '-'
+	| '~'
+	| '!'
+	;
+
+primary_expression
+	: constant
+	| 'this'
+	| id_expression
+	| '(' expression ')'
+	;
+
+constant
+    :   HEX_LITERAL
+    |   OCTAL_LITERAL
+    |   DECIMAL_LITERAL
+    |	CHARACTER_LITERAL
+    |	STRING_LITERAL
+    |   FLOATING_POINT_LITERAL
+    ;
+
+/*
+ * A couple C++ features are ommited:
+ * - No new_placement
+ * - No global reference for new (since the global new operator is the only one that can be used)
+ */
+new_expression
+	: n = 'new' new_type_id new_initializer? -> ^($n new_type_id ^(NEW_INITIALIZER new_initializer?))
+	| n = 'new' '(' type_name["type name"] ')' new_initializer? -> ^($n type_name ^(NEW_INITIALIZER new_initializer?))
+	;
+
+new_type_id returns [Type t]
+scope{
+	Type inferedType;
+}
+@init{
+	$new_type_id::inferedType = null;
+}
+@after{
+	$t = $new_type_id::inferedType;
+}
+	: specifier_qualifier_list
+	  {
+	  	if($specifier_qualifier_list.error != null){
+	  		Token st = $specifier_qualifier_list.stop;
+	  		this.yield_error($specifier_qualifier_list.error + $specifier_qualifier_list.init_decl_err + " 'type name'",
+	  				 this.fixLine(st), st.getCharPositionInLine());
+	  	}
+	  	else{
+	  		$new_type_id::inferedType = $specifier_qualifier_list.t;
+	  	}
+	  }
+	  new_declarator?
+	  -> NEW_TYPE_ID<NewTypeIdToken>[$new_type_id::inferedType]
+	;
+
+new_declarator
+scope{
+  ArrayList<ptr_cv> ptrs;
+}
+	: { $new_declarator::ptrs = new ArrayList<ptr_cv>(); }
+	  pointer[$new_declarator::ptrs]
+	  {
+	  	if($new_type_id::inferedType != null){
+		  	ptr_cv quals = $new_declarator::ptrs.get(0);
+	    		Pointer ptr = new Pointer(null, quals.isConst, quals.isVolatile);
+	    		Pointer pending = ptr;
+	    		for(int i = 1 ; i < $new_declarator::ptrs.size() ; ++i){
+	    			quals = $new_declarator::ptrs.get(i);
+	    			Pointer temp = new Pointer(null, quals.isConst, quals.isVolatile);
+	    			pending.setPointsTo(temp);
+	    			pending = temp;
+	    		}
+	    		pending.setPointsTo($new_type_id::inferedType);
+	    		$new_type_id::inferedType = pending;
+    		}
+	  }
+	  new_declarator?
+	| direct_new_declarator
+	;
+
+direct_new_declarator
+	: '[' expression ']' 
+	   direct_new_declarator_tail[0]?
+	   {
+	   	if($new_type_id::inferedType != null) 
+	  		$new_type_id::inferedType = new Pointer($new_type_id::inferedType, false, false);
+	   }
+	;
+
+direct_new_declarator_tail[int depth]
+scope{
+	int tmpDepth;
+}
+@init{
+	$direct_new_declarator_tail::tmpDepth = depth;
+}
+	: '[' constant_expression ']' 
+	   {
+	   	if($new_type_id::inferedType != null)
+	   		if(depth == 0){
+	   			$new_type_id::inferedType = new CpmArray($new_type_id::inferedType, 1);
+	   		}
+	   		else{
+	   			((CpmArray)$new_type_id::inferedType).increaseDimensions();
+	   		}
+	   }
+	   direct_new_declarator_tail[$direct_new_declarator_tail::tmpDepth++]
+	| '[' constant_expression ']'
+	   {
+	   	if($new_type_id::inferedType != null)
+	   		if(depth == 0){
+	   			$new_type_id::inferedType = new CpmArray($new_type_id::inferedType, 1);
+	   		}
+	   		else{
+	   			((CpmArray)$new_type_id::inferedType).increaseDimensions();
+	   		}
+	   }
+	;
+
+new_initializer
+	: '(' argument_expression_list? ')'
+	;
+
+delete_expression
+	: 'delete' cast_expression
+	| 'delete' '[' ']' cast_expression
+	;
+
 // S t a t e m e n t s
 
 statement
@@ -3194,49 +3375,74 @@ statement
 	;
 
 labeled_statement
-	: IDENTIFIER ':' statement
-	| 'case' constant_expression ':' statement
-	| 'default' ':' statement
+	: /*IDENTIFIER ':' statement
+	|*/
+	  c = 'case' constant_expression sem = ':' statement -> ^(CASE_STMT[$c] constant_expression ^(CASE_SLCT[$sem] statement))
+	| def = 'default' sem = ':' statement -> ^(DEFAULT_STMT[$def] ^(CASE_SLCT[$sem] statement))
 	;
 
 compound_statement
-	: '{' (declaration | statement)* '}'				//not only at the begining
+	: '{' ( declaration
+	      | statement)* '}'	//declarations not only at the begining of a compound statement
 	;
+	
 
-statement_list
-	: statement+
-	;
 
 expression_statement
 	: ';'
-	| expression ';'
+	| expression ';'!
 	;
-
+/*
+ * There is no variable declaration iside a condition (like C++)
+ * Only inside the for_init_statement .
+ */
 selection_statement
-	: 'if' '(' expression ')' statement (options {k=1; backtrack=false;}:'else' statement)?
-	| 'switch' '(' expression ')' statement
+	: i = 'if' '(' expression ')' stmt1 = statement (options {k=1; backtrack=false;}: else_prt = 'else' stmt2 = statement)?
+	  -> {$else_prt == null}? ^(IF_STMT[$i] expression $stmt1)
+	  -> ^(IF_ELSE_STMT[$i] expression $stmt1 ^(ELSE_PRT[$else_prt] $stmt2))
+	| s = 'switch' '(' expression ')' statement
+	  -> ^(SWITCH_STMT[$s] expression statement)
 	;
 
 iteration_statement
-	: 'while' '(' expression ')' statement
-	| 'do' statement 'while' '(' expression ')' ';'
-	| 'for' '(' init_for_iteration_stmt expression_statement expression? ')' statement
+	: w = 'while' '(' expression ')' statement
+	-> ^(WHILE_COND[$w] expression ^(WHILE_BODY statement))
+	| d = 'do' statement 'while' '(' expression ')' ';'
+	 -> ^(DO_WHILE_STMT[$d] ^(DO_WHILE_BODY statement) ^(WHILE_COND[$w] expression))
+	| f = 'for' '(' for_init_statement expression_statement expression? ')' statement
+	-> ^(FOR_STMT[$f] for_init_statement expression_statement expression? ^(FOR_BODY statement))
 	;
 			
-init_for_iteration_stmt
-	: //simple_declaration
-	  expression_statement
+for_init_statement
+	: simple_declaration ';'!
+	| expression_statement
 	;
 
-jump_statement
-	: 'goto' IDENTIFIER ';'
-	| 'continue' ';'
-	| 'break' ';'
-	| 'return' ';'
-	| 'return' expression ';'
+
+jump_statement	: /*'goto' IDENTIFIER ';'
+	|*/ 
+	  'continue' ';'!
+	| 'break' ';'!
+	| ret = 'return' exp = expression? ';'
+	  -> {$exp.tree != null}? ^(RETURN_EXP[$ret] expression)
+	  -> RETURN_EXP[$ret]
 	;
 	
 //C+- aux rules (different rules to adjust C's syntax)
+
+id_expression
+	: global_scope = '::'? IDENTIFIER id_expression_tail?
+	-> { $global_scope != null }? ^(ID_EXPRESSION<IdExpressionToken> '::' id_expression_tail?)
+	-> ^(ID_EXPRESSION<IdExpressionToken> id_expression_tail?)
+	;
+
+id_expression_tail
+	: '::' IDENTIFIER id_expression_tail
+	-> ^('::' IDENTIFIER id_expression_tail)
+	| IDENTIFIER
+	-> IDENTIFIER
+	;
+
 
 nested_identifier returns [DefinesNamespace namespace]
 scope{
@@ -3280,6 +3486,8 @@ scope{
 	  {
 	  	$namespace = $nested_identifier::runner;
 	  }
+	  -> { $global_scope != null}? ^(NESTED_IDENTIFIER<NestedIdentifierToken>[$namespace, $declarator_strings::dir_decl_identifier] '::' IDENTIFIER ^('::' nested_identifier_tail))
+	  -> ^(NESTED_IDENTIFIER<NestedIdentifierToken>[$namespace, $declarator_strings::dir_decl_identifier] IDENTIFIER '::' nested_identifier_tail)
 	;
 	
 nested_identifier_tail
@@ -3308,6 +3516,7 @@ nested_identifier_tail
 	  	}
 	  }
 	  '::' nested_identifier_tail
+	  -> ^(IDENTIFIER '::' nested_identifier_tail)
 	| IDENTIFIER
 	  {
 	  	$declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
@@ -3319,6 +3528,7 @@ nested_identifier_tail
 
 		direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error);
 	  }
+	  -> IDENTIFIER
 	;
 	
 //Preprocessor
@@ -3336,6 +3546,10 @@ scope{
 	boolean is_enter;
 	boolean is_exit;
 	boolean is_stl_header;
+	int baseLine;
+	int preprocLine;
+	int includeLine;
+	String fileName;
 }
 @init{
 	$line_marker::is_enter = false;
@@ -3343,9 +3557,9 @@ scope{
 	$line_marker::is_stl_header = false;
 }
 	: h_tag = '#' DECIMAL_LITERAL STRING_LITERAL line_marker_flags? { String file = $STRING_LITERAL.text;
-									  file = file.substring(1, file.length() - 1);
-									  int baseLine = Integer.parseInt($DECIMAL_LITERAL.text);
-									  int preprocLine = $h_tag.line;
+									  $line_marker::fileName = file.substring(1, file.length() - 1);
+									  $line_marker::baseLine = Integer.parseInt($DECIMAL_LITERAL.text);
+									  $line_marker::preprocLine = $h_tag.line;
 
 									  //ignore preproc useless stuff 
 									  if(file.equals("<built-in>") == false && file.equals("<command-line>") == false){
@@ -3354,25 +3568,33 @@ scope{
 									  	  this.stlFile = file;
 
 										  if($line_marker::is_enter == true){
-										  	this.preproc.enterIncludedFile(file, 
-										  				       baseLine,
-										  				       preprocLine,
-										  				       this.fixLine($h_tag));
+										  	$line_marker::includeLine = this.fixLine($h_tag);
+										  	this.preproc.enterIncludedFile($line_marker::fileName, 
+										  				       $line_marker::baseLine,
+										  				       $line_marker::preprocLine,
+										  				       $line_marker::includeLine);
 										  }
 										  else if($line_marker::is_exit == true){
-										  	this.preproc.exitIncludedFile(baseLine, preprocLine);
+										  	this.preproc.exitIncludedFile($line_marker::baseLine, $line_marker::preprocLine);
 										  	$line_marker::is_stl_header = false;
 										  }
 										  else{
-										  	this.preproc.enterIncludedFile(file,
-										  				       baseLine,
-										  				       preprocLine,
-										  				       preprocLine);
+										  	$line_marker::includeLine = $line_marker::preprocLine;
+										  	this.preproc.enterIncludedFile($line_marker::fileName,
+										  				       $line_marker::baseLine,
+										  				       $line_marker::preprocLine,
+										  				       $line_marker::includeLine);
 										  }
 									  }
 									}
-									
-									-> ^(LINE_MARKER DECIMAL_LITERAL STRING_LITERAL line_marker_flags?)
+									-> { $line_marker::is_exit }? LINE_MARKER_EXIT<LineMarkerToken>[$line_marker::baseLine,
+																       $line_marker::preprocLine,
+																       $line_marker::is_stl_header]
+									-> LINE_MARKER_ENTER<EntryLineMarkerToken>[$line_marker::baseLine,
+														   $line_marker::preprocLine,
+														   $line_marker::is_stl_header,
+														   $line_marker::fileName,
+														   $line_marker::includeLine]
 	;
 
 line_marker_flags
@@ -3387,8 +3609,8 @@ line_marker_flags
 	  
 	  -> ^(DECIMAL_LITERAL line_marker_flags)
 	| DECIMAL_LITERAL
-		  {
-		  	  	int flag = Integer.parseInt($DECIMAL_LITERAL.text);
+	  {
+		int flag = Integer.parseInt($DECIMAL_LITERAL.text);
 	  	if(flag == 1) $line_marker::is_enter = true;
 	  	else if(flag == 2) $line_marker::is_exit = true;
 	  	else if(flag == 3) $line_marker::is_stl_header = true;

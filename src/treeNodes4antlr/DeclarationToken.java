@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package treeNodes4antlr;
 
 import org.antlr.runtime.CommonToken;
@@ -16,7 +12,7 @@ public class DeclarationToken extends CommonToken{
     Type declType;
     
     public DeclarationToken(int tNode, Type declType){
-        super(tNode, "DECL");
+        super(tNode, "DECLARATION");
         this.declType = declType;
     }
     

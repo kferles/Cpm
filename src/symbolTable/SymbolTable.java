@@ -402,10 +402,10 @@ public class SymbolTable extends Namespace{
                 ambiguous.setIsPending();
                 throw ambiguous;
             }
-            catch(AccessSpecViolation access_viol){
-                access_viol.setContextError(line, pos);
-                throw access_viol;
-            }
+//            catch(AccessSpecViolation access_viol){
+//                access_viol.setContextError(line, pos);
+//                throw access_viol;
+//            }
 
             if(rv == null && allowNull == false) throw new DoesNotNameType(t_name);
             
@@ -446,23 +446,27 @@ public class SymbolTable extends Namespace{
             catch(AmbiguousReference ambigoous){
                 ambigoous.setLastValid(prev);
                 ambigoous.referenceTypeError(line, pos);
-                if(i == chain.size() - 1) ambigoous.setIsPending();
-                if(ambigoous.isPending() == true){
-                    ambigoous.finalizeErrorMessage();
-                }
-                else{
-                    ambigoous.finalizeErrorMessage(line, pos);
-                }
+                /*
+                 * TODO: check if this is ok with previous error messages 
+                 */
+                /*if(i == chain.size() - 1)*/
+                ambigoous.setIsPending();
+                //if(ambigoous.isPending() == true){
+                ambigoous.finalizeErrorMessage();
+                //}
+                //else{
+                //    ambigoous.finalizeErrorMessage(line, pos);
+                //}
                 throw ambigoous;
             }
             catch(InvalidScopeResolution invalid){
                 invalid.setMessage(prev, namespaceName, line, pos);
                 throw invalid;
             }
-            catch(AccessSpecViolation access_viol){
-                access_viol.setContextError(line, pos);
-                throw access_viol;
-            }
+//            catch(AccessSpecViolation access_viol){
+//                access_viol.setContextError(line, pos);
+//                throw access_viol;
+//            }
         }
         
         return rv;

@@ -482,8 +482,6 @@ public class Namespace implements DefinesNamespace{
         
         LookupResult res = this.lookup(name, from_scope, true, ignore_access);
         
-       //res.checkForAmbiguity();
-        
         rv = res.isResultType();
         
         return rv;
