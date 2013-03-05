@@ -83,6 +83,7 @@ tokens{
 	ENUM_DEFINITION;
 	ID_EXPRESSION;
 	FWD_DECLARATION;
+	CLASS_DECLARATION_LIST;
 }
 
 scope Type_Spec{
@@ -932,6 +933,10 @@ import treeNodes4antlr.*;
 			this.yield_error(diff.getMessage(), true);
 			this.yield_error(diff.getFinalError(), false);
 		}
+		catch(InvalidMethodLocalDeclaration invalidMethDecl){
+			this.yield_error(invalidMethDecl.getMessage(), cpm_class.getLine(), cpm_class.getPosition());
+		}
+		
 		return rv;
 	}
 	
@@ -968,6 +973,9 @@ import treeNodes4antlr.*;
                 	this.yield_error(diffSymbol.getMessage(), true);
                 	this.yield_error(diffSymbol.getFinalError(), false);
                 }
+                catch(InvalidMethodLocalDeclaration invalidMethDecl){
+                	this.yield_error(invalidMethDecl.getMessage(), id_line, id_pos);
+                }
 	}
 	
 	private void insertField(String declarator_id, Type t, int id_line, int id_pos, InClassDeclSpec class_specs){
@@ -984,7 +992,7 @@ import treeNodes4antlr.*;
 				if(this.symbolTable.isCurrentNamespaceClass() == true){
 					currentClass = (CpmClass) this.symbolTable.getCurrentNamespace();
 				}
-				
+
 				if(t.isComplete(currentClass) == true){
 					this.symbolTable.insertField(declarator_id, t, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos);
 				}
@@ -1010,7 +1018,7 @@ import treeNodes4antlr.*;
                 }
 	}
 	
-	private void insertMethod(String declarator_id, Method m, int id_line, int id_pos, InClassDeclSpec class_specs){
+	private void insertMethod(String declarator_id, Method m, int id_line, int id_pos, InClassDeclSpec class_specs, boolean insideFunctionDef){
 	
 		try{
 			if(class_specs.isExplicit == true){
@@ -1018,7 +1026,7 @@ import treeNodes4antlr.*;
 			}
 			else{
 				m.setVirtual(class_specs.isVirtual);
-				this.symbolTable.insertMethod(declarator_id, m, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos);
+				this.symbolTable.insertMethod(declarator_id, m, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos, insideFunctionDef);
 			}
 		}
 		catch(ConflictingDeclaration conflict){
@@ -1048,6 +1056,9 @@ import treeNodes4antlr.*;
                 catch(Redefinition redef){
                 	this.yield_error(redef.getMessage(), true);
                 	this.yield_error(redef.getFinalError(), false);
+                }
+                catch(InvalidMethodLocalDeclaration invMethodDecl){
+                	this.yield_error(invMethodDecl.getMessage(), id_line, id_pos);
                 }
 	
 	}
@@ -1128,23 +1139,35 @@ scope normal_mode_fail_level;
 function_definition
 scope{
 	Method methods_type;
+	String identifier;
 }
-scope declarator_strings;
-scope decl_infered;
 scope normal_mode_fail_level;
 scope parameters_id;
 @init{
-	$declarator_strings::dir_decl_identifier = null;
-	$declarator_strings::dir_decl_error = null;
-	$decl_infered::declarator = null;
 	$parameters_id::parameters_ids = null;
 	$function_definition::methods_type = null;
-	
+	$function_definition::identifier = null;
+
 	$normal_mode_fail_level::failed = false;
 	
 	this.resetErrorMessageAuxVars();
 }
-	: simple_declaration
+	: {
+		MethodDefinition methDef = new MethodDefinition(this.symbolTable.getCurrentNamespace());
+		
+		try{
+			this.symbolTable.insertMethDefinition(methDef);
+		}
+		catch(InvalidMethodLocalDeclaration invalidMethDecl){
+			Token nextTok = input.LT(1);
+			this.yield_error(invalidMethDecl.getMessage(), this.fixLine(nextTok), nextTok.getCharPositionInLine());
+			this.normal_mode = false;
+			$normal_mode_fail_level::failed = true;
+		}
+	  	this.symbolTable.setCurrentScope(methDef);
+	  	this.symbolTable.setCurrentAccess(null);
+	  }
+	  simple_declaration  // ANSI style only
 	  {
 	  	Method m = $function_definition::methods_type;
 	  	if(m == null){
@@ -1155,8 +1178,11 @@ scope parameters_id;
 	  		this.normal_mode = false;
 	  		$normal_mode_fail_level::failed = true;
 	  	}
-	  } //here and in constructor, error if identifiers are missing ...
-	  compound_statement turn_on_normal_mode	// ANSI style only
+	  }
+	  compound_statement turn_on_normal_mode 
+	  {
+	  	this.symbolTable.endScope();
+	  }
 
 	  -> ^(METHOD<MethodToken>[$function_definition::methods_type] compound_statement)
 	;
@@ -1474,13 +1500,6 @@ function_specifier
 	  }
 	  { explicit_count_error() == true }?
 	;
-	
-//class_init_declarator_list[String error, Type data_type, InClassDeclSpec class_specs]
-//@init{
-//	this.normal_mode = true;
-//}
-//	: init_declarator_list[$error, $data_type, $class_specs]?
-//	;
 
 init_declarator_list [String error, Type data_type, InClassDeclSpec class_specs] returns [boolean newTypeInRv]
 scope{
@@ -1532,7 +1551,7 @@ scope decl_id_info;
 	  		DefinesNamespace curr_scope = this.symbolTable.getCurrentNamespace();
 
 			if(nameSp != null){
-	  			res = nameSp.lookup(id, curr_scope, false, true);
+	  			res = nameSp.localLookup(id, curr_scope, false, true);
 	  			isNameSpEnclosed = nameSp.isEnclosedInNamespace(curr_scope);
 	  		}
 	  		
@@ -1547,13 +1566,13 @@ scope decl_id_info;
 			  	int id_line = $decl_id_info::line;
 			  	int id_pos = $decl_id_info::pos;
 			  	if(decl_inf_t == null) {
-			  		if($function_definition.size() == 0) System.out.println($data_type.toString(declarator_id));
+			  		System.out.println($data_type.toString(declarator_id));
 			  		$declType = $data_type;
 			  		if($declaration.size() > 0 && $declaration::isTypedef == true){
 			  			this.insertSynonym(declarator_id, $data_type, id_line, id_pos, $class_specs);
 			  		}
 			  		else{
-		  				if($function_definition.size() == 0 && externDef == false){
+		  				if(externDef == false){
 		  					this.insertField(declarator_id, $data_type, id_line, id_pos, $class_specs);
 		  				}
 			  		}
@@ -1580,7 +1599,7 @@ scope decl_id_info;
 					  			this.insertSynonym(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
 					  		}
 					  		else{
-				  				if($function_definition.size() == 0 && externDef == false){
+				  				if(externDef == false){
 				  					this.insertField(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
 				  				}
 					  		}
@@ -1676,7 +1695,10 @@ scope decl_id_info;
 					  				//if(this.symbolTable.isCurrentNamespaceClass() == true){
 					  				if($function_definition.size() > 0){
 					  					decl_inf_t.m_rv.setIsDefined();
+					  					MethodDefinition methDef = (MethodDefinition) this.symbolTable.getCurrentNamespace();
+					  					methDef.setMethodSign(decl_inf_t.m_rv);
 					  					$function_definition::methods_type = decl_inf_t.m_rv;
+					  					$function_definition::identifier = declarator_id;
 					  				}
 					  				
 					  				/*
@@ -1684,7 +1706,7 @@ scope decl_id_info;
 					  				 * a parameter to another function
 					  				 */
 					  				if(!externDef){
-					  					this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs);
+					  					this.insertMethod(declarator_id, decl_inf_t.m_rv, id_line, id_pos, $class_specs, $function_definition.size() > 0 ? true : false );
 					  				}
 						  		}
 					  		}
@@ -1698,7 +1720,7 @@ scope decl_id_info;
 					  			this.insertSynonym(declarator_id, ar, id_line, id_pos, $class_specs);
 					  		}
 					  		else{
-				  				if($function_definition.size() == 0){
+				  				if(externDef == false){
 				  					this.insertField(declarator_id, ar, id_line, id_pos, $class_specs);
 				  				}
 					  		}
@@ -1996,7 +2018,7 @@ struct_union_or_class_specifier
 	  			String name = info.getName();
 	  			int line = info.getLine();
 	  			int pos = info.getPos();
-	  			$Type_Spec::isForwardDeclaration = true; 
+	  			$Type_Spec::isForwardDeclaration = true;
 	  			CpmClass _class = new CpmClass($struct_union_or_class.start.getText(), 
 	  					      name, 
 	  					      symbolTable.getCurrentNamespace(),
@@ -2310,6 +2332,9 @@ scope{
                 	$enum_definition::enumeration = null;
                 	s_t = null;
                 }
+                catch(InvalidMethodLocalDeclaration invalidMethDecl){
+                	this.yield_error(invalidMethDecl.getMessage(), line, pos);
+                }
 	  }
 	  '{' enumerator_list '}' init_declarator_list[null, $enum_definition::enumeration, new InClassDeclSpec(false, false, false)]?
 	  {
@@ -2444,7 +2469,7 @@ scope{
 	boolean declList;
 }
 	: class_content_element*
-	-> class_content_element*
+	-> ^(CLASS_DECLARATION_LIST class_content_element*)
 	;
 	
 class_content_element
@@ -2611,15 +2636,6 @@ scope cv_qual;
            }
 	;
 
-class_declarator_list
-	: class_declarator (',' class_declarator)*
-	;
-
-class_declarator
-	: declarator (':' constant_expression)?
-	| ':' constant_expression
-	;
-
 enum_specifier
 options { k=3;}
 	: //'enum' '{' enumerator_list '}'
@@ -2738,13 +2754,23 @@ direct_declarator
 				$init_declarator::isExternDef = true;
 				$init_declarator::namespace = $nested_identifier.namespace;
 			}
+			
+			if($function_definition.size() > 0){
+				((MethodDefinition) this.symbolTable.getCurrentNamespace()).setBelongsTo($nested_identifier.namespace);
+			}
 		}
 		-> nested_identifier
 		| IDENTIFIER { $declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
-			   if($parameter_declaration.size() > 0) $parameter_declaration::p.id = $IDENTIFIER.text;
+			   if($parameter_declaration.size() > 0)
+			   	$parameter_declaration::p.id = $IDENTIFIER.text;
 			   if($decl_id_info.size() > 0){
 			   	$decl_id_info::line = this.fixLine($IDENTIFIER);
 			   	$decl_id_info::pos = $IDENTIFIER.pos;
+			   }
+			   
+			   if($function_definition.size() > 0){
+			   	MethodDefinition meth = (MethodDefinition) this.symbolTable.getCurrentNamespace();
+			   	meth.setBelongsTo(meth.getDefinedInNamespace());
 			   }
 			   if(pending_undeclared_err != null) pending_undeclared_err = null;
 			   direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error); } 
@@ -2801,19 +2827,34 @@ scope cv_qual;
     	  	
     	  	Method m = null;
     	  	ParameterList ps = null;
+
+		DefinesNamespace parent;
+		
+		if($init_declarator.size() > 0 && $init_declarator::isExternDef){
+			parent = $init_declarator::namespace;
+		}
+		else{
+			if($function_definition.size() > 0){
+				parent = ((MethodDefinition )this.symbolTable.getCurrentNamespace()).getDefinedInNamespace();
+			}
+			else{
+				parent = this.symbolTable.getCurrentNamespace();
+			}
+		}
+
     	  	if($parameter_type_list.tree != null){
     	  		ps = $parameter_type_list.params;
     	  		if(ps != null){
     	  			/*
     	  			 * virtual = false here because this flag is available in an other level
     	  			 */
-    	  			m = new Method(null, ps.params, this.symbolTable.getCurrentNamespace(),
-    	  				       false, isAbstract, isConst, isVolatile, ps.hasVarargs);
+    	  			m = new Method(null, ps.params, parent, false, 
+    	  				       isAbstract, isConst, isVolatile, ps.hasVarargs);
     	  		}
     	  	}
     	  	else{
-    	  		m = new Method(null, null, this.symbolTable.getCurrentNamespace(),
-    	  			       false, isAbstract, isConst, isVolatile, false);
+    	  		m = new Method(null, null, parent, false,
+    	  			       isAbstract, isConst, isVolatile, false);
     	  	}
     	  	
     	  	if(m != null){
@@ -2982,6 +3023,29 @@ scope decl_id_info;
 		  			$param = null;
 		  		}
 		  	}
+
+	  		if($function_definition.size() > 0 && $param != null){
+
+	  			String id = $declarator_strings::dir_decl_identifier;
+				MethodDefinition methDef = (MethodDefinition) this.symbolTable.getCurrentNamespace();
+	  			if(id != null){
+	  				try{
+	  					methDef.insertParameter(id, $param.t, $decl_id_info::line, $decl_id_info::pos);
+	  				}
+	  				catch(Redefinition redef){
+						this.yield_error(redef.getMessage(), true);
+						this.yield_error(redef.getFinalError(), false);
+					}
+					catch(ChangingMeaningOf changeMean){
+			                	this.yield_error(changeMean.getMessage(), true);
+			                	this.yield_error(changeMean.getFinalError(), false);
+			                }
+	  			}
+	  			else{
+	  				Token start = $declaration_specifiers.start;
+	  				this.yield_error("error: missing identifier for method parameter", this.fixLine(start), start.getCharPositionInLine());
+	  			}
+	  		}
 		  }
 		  else{
 		  	$param = null;
@@ -3382,8 +3446,19 @@ labeled_statement
 	;
 
 compound_statement
-	: '{' ( declaration
+scope{
+	MethodDefinition methDef;
+}
+	: 
+	  {
+	  	$compound_statement::methDef = (MethodDefinition) this.symbolTable.getCurrentNamespace();
+	  	$compound_statement::methDef.enterNewBlock();
+	  }
+	  '{' ( declaration
 	      | statement)* '}'	//declarations not only at the begining of a compound statement
+	  {
+	   	$compound_statement::methDef.exitBlock();
+	  }
 	;
 	
 
@@ -3521,7 +3596,7 @@ nested_identifier_tail
 	  {
 	  	$declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
 		if($parameter_declaration.size() > 0) $parameter_declaration::p.id = $IDENTIFIER.text;
-		if($decl_id_info.size() > 0){ System.out.println($IDENTIFIER.text);
+		if($decl_id_info.size() > 0){
 			$decl_id_info::line = this.fixLine($IDENTIFIER);
 			$decl_id_info::pos = $IDENTIFIER.pos;
 		}

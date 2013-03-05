@@ -28,6 +28,7 @@ public class SymbolTable extends Namespace{
             this.access = current_access;
             if(type == ScopeType.Class) this.scope = current_class;
             if(type == ScopeType.Namespace) this.scope = current_namespace;
+            if(type == ScopeType.Method) this.scope = current_method;
         }
         
     }
@@ -35,14 +36,17 @@ public class SymbolTable extends Namespace{
     
     enum ScopeType{
         Class,
-        Namespace
+        Namespace,
+        Method
     }
     
     ScopeType type = ScopeType.Namespace;
     
     Namespace current_namespace = this;
     
-    CpmClass current_class = null;
+    CpmClass current_class;
+    
+    MethodDefinition current_method;
     
     Stack<ScopeStackElem> scopes = new Stack<ScopeStackElem>();
     
@@ -167,17 +171,32 @@ public class SymbolTable extends Namespace{
         this.current_namespace = scope;
     }
     
+    public void setCurrentScope(MethodDefinition scope){
+        scopes.push(new ScopeStackElem());
+        this.type = ScopeType.Method;
+        this.current_method = scope;
+    }
+    
     public void endScope(){
         ScopeStackElem prev = scopes.pop();
         this.type = prev.t;
         this.current_access = prev.access;
-        if(this.type == ScopeType.Class){
-            this.current_class = (CpmClass) prev.scope;
-            this.current_namespace = null;
-        }
-        else if(this.type == ScopeType.Namespace){
-            this.current_namespace = (Namespace) prev.scope;
-            this.current_class = null;
+        switch(this.type){
+            case Class:
+                this.current_class = (CpmClass) prev.scope;
+                this.current_namespace = null;
+                this.current_method = null;
+                break;
+            case Namespace:
+                this.current_namespace = (Namespace) prev.scope;
+                this.current_class = null;
+                this.current_method = null;
+                break;
+            case Method:
+                this.current_method = (MethodDefinition) prev.scope;
+                this.current_class = null;
+                this.current_namespace = null;
+                break;
         }
     }
     
@@ -186,21 +205,28 @@ public class SymbolTable extends Namespace{
                                                                                                               DiffrentSymbol {
         
         t = typeFromCache(t);
-        if(this.type == ScopeType.Class){
-            current_class.insertField(name, t, this.current_access, isStatic, line, pos);
-        }
-        else if(this.type == ScopeType.Namespace){
-            current_namespace.insertField(name, t, fileName, line, pos);
+        switch(this.type){
+            case Class:
+                current_class.insertField(name, t, this.current_access, isStatic, line, pos);
+                break;
+            case Namespace:
+                current_namespace.insertField(name, t, fileName, line, pos);
+                break;
+            case Method:
+                current_method.insertLocalDeclaration(name, t, line, pos);
+                break;
+        
         }
     }
     
-    public void insertMethod(String name, Method m, boolean isStatic, String fileName, int line, int pos) throws ConflictingDeclaration, 
-                                                                                                                 ChangingMeaningOf,
-                                                                                                                 CannotBeOverloaded,
-                                                                                                                 DiffrentSymbol,
-                                                                                                                 ConflictingRVforVirtual,
-                                                                                                                 InvalidCovariantForVirtual,
-                                                                                                                 Redefinition{
+    public void insertMethod(String name, Method m, boolean isStatic, String fileName, int line, int pos, boolean insideMethodDef) throws ConflictingDeclaration, 
+                                                                                                                                          ChangingMeaningOf,
+                                                                                                                                          CannotBeOverloaded,
+                                                                                                                                          DiffrentSymbol,
+                                                                                                                                          ConflictingRVforVirtual,
+                                                                                                                                          InvalidCovariantForVirtual,
+                                                                                                                                          Redefinition,
+                                                                                                                                          InvalidMethodLocalDeclaration{
 
         Method.Signature signature = m.getSignature();
         Type rv = signature.getReturnValue();
@@ -217,11 +243,30 @@ public class SymbolTable extends Namespace{
             signature.setParameters(newParams);
         }
         
-        if(this.type == ScopeType.Class){
-            current_class.insertMethod(name, m, this.current_access, isStatic, line, pos);
+        if(!insideMethodDef){
+            switch(this.type){
+                case Class:
+                    this.current_class.insertMethod(name, m, this.current_access, isStatic, line, pos);
+                    break;
+                case Namespace:
+                    this.current_namespace.insertMethod(name, m, fileName, line, pos);
+                    break;
+                case Method:
+                    throw new InvalidMethodLocalDeclaration("method declarations");
+            }
         }
-        else if(this.type == ScopeType.Namespace){
-            current_namespace.insertMethod(name, m, fileName, line, pos);
+        else{
+            ScopeStackElem prev = scopes.peek();
+            switch(prev.t){
+                case Class:
+                    ((CpmClass)prev.scope).insertMethod(name, m, prev.access, isStatic, line, pos);
+                    break;
+                case Namespace:
+                    ((Namespace)prev.scope).insertMethod(name, m, fileName, line, pos);
+                    break;
+                case Method:
+                    throw new InvalidMethodLocalDeclaration("method definitions");
+            }
         }
     }
     
@@ -243,13 +288,18 @@ public class SymbolTable extends Namespace{
     public CpmClass insertInnerType(String name, CpmClass cpm_class, boolean isStatic) throws SameNameAsParentClass,
                                                                                           ConflictingDeclaration,
                                                                                           Redefinition,
-                                                                                          DiffrentSymbol {
+                                                                                          DiffrentSymbol,
+                                                                                          InvalidMethodLocalDeclaration{
         
-        if(this.type == ScopeType.Class){
-            current_class.insertInnerType(name, cpm_class, this.current_access, isStatic);
-        }
-        else if(this.type == ScopeType.Namespace){
-            current_namespace.insertInnerType(name, cpm_class);
+        switch(this.type){
+            case Class:
+                this.current_class.insertInnerType(name, cpm_class, this.current_access, isStatic);
+                break;
+            case Namespace:
+                this.current_namespace.insertInnerType(name, cpm_class);
+                break;
+            case Method:
+                throw new InvalidMethodLocalDeclaration("type definitions and forward declarations");
         }
         
         return cpm_class;
@@ -258,15 +308,36 @@ public class SymbolTable extends Namespace{
     public void insertInnerSyn(String name, SynonymType syn) throws SameNameAsParentClass,
                                                                     ConflictingDeclaration,
                                                                     Redefinition,
-                                                                    DiffrentSymbol{
+                                                                    DiffrentSymbol,
+                                                                    InvalidMethodLocalDeclaration{
         
         syn.setSynonym(this.typeFromCache(syn.getSynonym()));
-        if(this.type == ScopeType.Class){
-            current_class.insertInnerSynonymType(name, syn, this.current_access, false);
+        switch(this.type){
+            case Class:
+                current_class.insertInnerSynonymType(name, syn, this.current_access, false);
+                break;
+            case Namespace:
+                current_namespace.insertInnerSynonym(name, syn);
+                break;
+            case Method:
+                throw new InvalidMethodLocalDeclaration("tyoe definitions");
+
         }
-        else if(this.type == ScopeType.Namespace){
-            current_namespace.insertInnerSynonym(name, syn);
+    }
+    
+    public void insertMethDefinition(MethodDefinition meth) throws InvalidMethodLocalDeclaration{
+    
+        switch(this.type){
+            case Class:
+                this.current_class.insertMethodDefinition(meth);
+                break;
+            case Namespace:
+                this.current_namespace.insertMethodDefinition(meth);
+                break;
+            case Method:
+                throw new InvalidMethodLocalDeclaration("method definitions");
         }
+    
     }
     
     public Namespace insertNamespace(String name, Namespace inner_namespace) throws DiffrentSymbol {
@@ -277,12 +348,19 @@ public class SymbolTable extends Namespace{
     
     public DefinesNamespace getCurrentNamespace(){
         DefinesNamespace rv = null;
-        if(this.type == ScopeType.Class){
-            rv = this.current_class;
+        switch(this.type){
+            case Class:
+                rv = this.current_class;
+                break;
+            case Namespace:
+                rv = this.current_namespace;
+                break;
+            case Method:
+                rv = this.current_method;
+                break;
+                
         }
-        else if(this.type == ScopeType.Namespace){
-            rv = this.current_namespace;
-        }
+        
         return rv;
     }
     
@@ -308,10 +386,10 @@ public class SymbolTable extends Namespace{
                 t_name = inf.getName();
                 TypeDefinition t;
                 if(explicitGlobalScope == true) {
-                    t = super.findNamedType(t_name, curr, false);
+                    t = super.findTypeDefinition(t_name, curr, false);
                 }
                 else{
-                    t = curr.isValidNamedType(t_name, false);
+                    t = curr.isValidTypeDefinition(t_name, false);
                 }
 
                 if(inf.isTemplate() == true){
@@ -354,7 +432,7 @@ public class SymbolTable extends Namespace{
                 
                 inf = chain.get(i);
                 t_name = inf.getName();
-                rv = runner.findNamedType(t_name, curr, false);
+                rv = runner.findTypeDefinition(t_name, curr, false);
                 
                 if(inf.isTemplate() == true){
                     StlContainer container = (StlContainer) rv;
@@ -364,7 +442,7 @@ public class SymbolTable extends Namespace{
         }
         catch(ErrorMessage _){
             //There should be thrown no error message in the try segment,
-            //because this method is being called when isValidNamedType predicate (antlr) is true
+            //because this method is being called when isValidTypeDefinition predicate (antlr) is true
         }
         
         return rv;
@@ -389,10 +467,10 @@ public class SymbolTable extends Namespace{
             pos = tmp.getPos();
             try{
                 if(explicitGlobalScope == true){
-                    rv = super.findNamedType(t_name, curr, ignore_access);
+                    rv = super.findTypeDefinition(t_name, curr, ignore_access);
                 }
                 else{
-                    rv = curr.isValidNamedType(t_name, ignore_access);
+                    rv = curr.isValidTypeDefinition(t_name, ignore_access);
                 }
             }
             catch(AmbiguousReference ambiguous){
@@ -417,7 +495,7 @@ public class SymbolTable extends Namespace{
             line = tmp.getLine();
             pos = tmp.getPos();
             DefinesNamespace prev = null;
-            int i = 0;
+            int i;
             try{
                 if(explicitGlobalScope == true){
                     runner = super.findNamespace(namespaceName, curr, ignore_access);
@@ -439,7 +517,7 @@ public class SymbolTable extends Namespace{
                 }
                 tmp = chain.get(i);
                 namespaceName = tmp.getName();
-                rv = runner.findNamedType(namespaceName, curr, ignore_access);
+                rv = runner.findTypeDefinition(namespaceName, curr, ignore_access);
 
                 if(rv == null) throw new DoesNotNameType(namespaceName);
             }
