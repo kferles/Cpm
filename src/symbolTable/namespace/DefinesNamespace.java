@@ -4,6 +4,7 @@ import errorHandling.AccessSpecViolation;
 import errorHandling.AmbiguousReference;
 import errorHandling.InvalidScopeResolution;
 import java.util.HashMap;
+import java.util.Map;
 
 
 /**
@@ -14,7 +15,7 @@ public interface DefinesNamespace {
     
     public StringBuilder getStringName(StringBuilder in);
     
-    public HashMap<String, TypeDefinition> getVisibleTypeNames();
+    public Map<String, TypeDefinition> getVisibleTypeNames();
     
     public DefinesNamespace getParentNamespace();
     
@@ -22,15 +23,15 @@ public interface DefinesNamespace {
     
     public String getName();
     
-    public TypeDefinition isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
+    public TypeDefinition isValidTypeDefinition(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
     
-    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
+    public TypeDefinition findTypeDefinition(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference;
     
     public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference, InvalidScopeResolution;
     
     public DefinesNamespace findInnerNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference, InvalidScopeResolution;
     
-    public  LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access);
+    public  LookupResult localLookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access);
     
     public boolean isEnclosedInNamespace(DefinesNamespace namespace);
     

@@ -99,16 +99,24 @@ public class LookupResult {
         this.accessErrForFields = accessErrForFields;
         this.ignore_access = ignore_access;
     }
+    
+    private int getResultsize(){
+        return candidateTypes.size() + (candidateNamespaces == null ? 0 : candidateNamespaces.size())
+                      + candidateFields.size() + (candidateMethods == null ? 0 : candidateMethods.size());
+    }
 
     /**
      * Checks if the result is ambiguous. That is the requested name maps to more than one elements.
      * @throws AmbiguousReference If the lookup is ambiguous.
      */
     private void checkForAmbiguity() throws AmbiguousReference{
-        int resSize =   candidateTypes.size() + (candidateNamespaces == null ? 0 : candidateNamespaces.size())
-                      + candidateFields.size() + candidateMethods.size();
+        int resSize = this.getResultsize();
         
         if(resSize > 1) throw new AmbiguousReference(candidateTypes, candidateNamespaces, candidateFields, candidateMethods, nameForLookup);
+    }
+    
+    public boolean isResultEmpty() {
+        return this.getResultsize() == 0;
     }
     
     /**
@@ -166,7 +174,7 @@ public class LookupResult {
         this.checkForAmbiguity();
         MemberElementInfo<Method> rv = null;
         
-        if(this.candidateMethods.size() == 1){
+        if(this.candidateMethods != null && this.candidateMethods.size() == 1){
             Map<Method.Signature, ? extends MemberElementInfo<Method>> meth = this.candidateMethods.get(0);
             
             if(meth.containsKey(m.getSignature()) == true){

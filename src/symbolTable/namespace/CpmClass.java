@@ -18,29 +18,31 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     
     protected String name;
     
-    protected HashMap<String, ClassContentElement<? extends Type>> allSymbols = new HashMap<String, ClassContentElement<? extends Type>>();
+    protected Map<String, ClassContentElement<? extends Type>> allSymbols = new HashMap<String, ClassContentElement<? extends Type>>();
     
-    protected HashSet<CpmClass> superClasses = null;
+    protected Set<CpmClass> superClasses;
     
-    protected HashMap<String, ClassContentElement<Type>> fields = null;
+    protected Map<String, ClassContentElement<Type>> fields;
     
-    protected HashMap<String, ClassContentElement<CpmClass>> innerTypes = null;
+    protected Map<String, ClassContentElement<CpmClass>> innerTypes;
     
-    protected HashMap<String, ClassContentElement<SynonymType>> innerSynonyms = null;
+    protected Map<String, ClassContentElement<SynonymType>> innerSynonyms;
     
     /*
      * Methods are represented as a multi map to support method overloading.
      * That is, every name is maped to another map from a signature to a class Method
      * object. 
      */
-    protected HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>> methods = null;
+    protected Map<String, Map<Method.Signature, ClassContentElement<Method>>> methods;
     
-    protected HashMap<Method.Signature, ClassContentElement<Method>> constructors = null;
+    protected Map<Method.Signature, ClassContentElement<Method>> constructors;
     
-    protected ClassContentElement<Method> destructor = null;
+    protected ClassContentElement<Method> destructor;
     
-    protected HashMap<String, TypeDefinition> visibleTypeNames = null;
-    
+    protected Map<String, TypeDefinition> visibleTypeNames;
+
+    protected List<MethodDefinition> methodDefinitions;
+
     protected DefinesNamespace belongsTo;
     
     protected String struct_union_or_class;
@@ -225,7 +227,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         visited.add(this);
         boolean shadow = false;
         if(this.methods != null && this.methods.containsKey(name) == true){
-            HashMap<Method.Signature, ClassContentElement<Method>> ms = this.methods.get(name);
+            Map<Method.Signature, ClassContentElement<Method>> ms = this.methods.get(name);
             ClassContentElement<Method> supermElem = ms.get(m.getSignature());
             if(supermElem != null){
                 Method superm = supermElem.element;
@@ -408,8 +410,8 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         if(this.superClasses == null) this.superClasses = new HashSet<CpmClass>();
         for(CpmClass _class : superTypes){
             this.superClasses.add(_class);
-            HashMap<String, TypeDefinition> visible_tnames = _class.getVisibleTypeNames();
-            HashMap<String, ClassContentElement<? extends Type>> visibleSymbols = _class.allSymbols;
+            Map<String, TypeDefinition> visible_tnames = _class.getVisibleTypeNames();
+            Map<String, ClassContentElement<? extends Type>> visibleSymbols = _class.allSymbols;
             
             for(String t_name : visible_tnames.keySet()){
                 if(removed.contains(t_name) == false){
@@ -429,7 +431,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
                 }
             }
         }
-        HashMap<String, TypeDefinition> parent_vis = this.belongsTo.getVisibleTypeNames();
+        Map<String, TypeDefinition> parent_vis = this.belongsTo.getVisibleTypeNames();
         for(String t_name : parent_vis.keySet()){
             if(removed.contains(t_name) == false){
                 if(this.visibleTypeNames.containsKey(t_name) == false){
@@ -475,7 +477,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         if(cpmClass.fields != null) this.fields = new HashMap<String, ClassContentElement<Type>>(cpmClass.fields);
         if(cpmClass.innerTypes != null) this.innerTypes = new HashMap<String, ClassContentElement<CpmClass>>(cpmClass.innerTypes);
         if(cpmClass.innerSynonyms != null) this.innerSynonyms = new HashMap<String, ClassContentElement<SynonymType>>(cpmClass.innerSynonyms);
-        if(cpmClass.methods != null) this.methods = new HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>> (cpmClass.methods);
+        if(cpmClass.methods != null) this.methods = new HashMap<String, Map<Method.Signature, ClassContentElement<Method>>> (cpmClass.methods);
         if(cpmClass.constructors != null) this.constructors = new HashMap<Method.Signature, ClassContentElement<Method>> (cpmClass.constructors);
         if(cpmClass.destructor != null) this.destructor = new ClassContentElement<Method>(cpmClass.destructor);
         
@@ -501,8 +503,8 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         HashSet<String> removed = new HashSet<String>();
         this.visibleTypeNames = new HashMap<String, TypeDefinition>();
         for(CpmClass _class : superTypes){
-            HashMap<String, TypeDefinition> visible_tnames = _class.getVisibleTypeNames();
-            HashMap<String, ClassContentElement<? extends Type>> visibleSymbols = _class.allSymbols;
+            Map<String, TypeDefinition> visible_tnames = _class.getVisibleTypeNames();
+            Map<String, ClassContentElement<? extends Type>> visibleSymbols = _class.allSymbols;
             
             for(String t_name : visible_tnames.keySet()){
                 if(removed.contains(t_name) == false){
@@ -526,7 +528,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
                 }
             }
         }
-        HashMap<String, TypeDefinition> parent_vis = this.belongsTo.getVisibleTypeNames();
+        Map<String, TypeDefinition> parent_vis = this.belongsTo.getVisibleTypeNames();
         for(String t_name : parent_vis.keySet()){
             if(removed.contains(t_name) == false){
                 if(this.visibleTypeNames.containsKey(t_name) == false){
@@ -633,9 +635,9 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
                                                                                                                         ConflictingRVforVirtual,
                                                                                                                         InvalidCovariantForVirtual{
 
-        if(this.methods == null) this.methods = new HashMap<String, HashMap<Method.Signature, ClassContentElement<Method>>>();
+        if(this.methods == null) this.methods = new HashMap<String, Map<Method.Signature, ClassContentElement<Method>>>();
         if(this.methods.containsKey(name)){
-            HashMap<Method.Signature, ClassContentElement<Method>> m1 = methods.get(name);
+            Map<Method.Signature, ClassContentElement<Method>> m1 = methods.get(name);
             String id = this.getFieldsFullName(name);
             for(ClassContentElement<Method> elem : m1.values()){
                 if(elem.element.identicalParameters(m)){
@@ -685,6 +687,12 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         }
         
         this.destructor = new ClassContentElement<Method>(m, access, false, fileName, line, pos);
+    }
+    
+    public void insertMethodDefinition(MethodDefinition methDef){
+        if(this.methodDefinitions == null) methodDefinitions = new ArrayList<MethodDefinition>();
+        
+        this.methodDefinitions.add(methDef);
     }
     
     @Override
@@ -813,11 +821,11 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     }
     
     @Override
-    public TypeDefinition isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
+    public TypeDefinition isValidTypeDefinition(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
         TypeDefinition rv = null;
         DefinesNamespace curr_namespace = this;
         while(curr_namespace != null){
-            rv = curr_namespace.findNamedType(name, this, ignore_access);
+            rv = curr_namespace.findTypeDefinition(name, this, ignore_access);
             if(rv != null) break;
             curr_namespace = curr_namespace.getParentNamespace();
         }
@@ -825,13 +833,11 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     }
 
     @Override
-    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, 
+    public TypeDefinition findTypeDefinition(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation, 
                                                                                                                 AmbiguousReference{
         TypeDefinition rv;
         
-        LookupResult res = this.lookup(name, from_scope, true, ignore_access);
-        
-        //res.checkForAmbiguity();
+        LookupResult res = this.localLookup(name, from_scope, true, ignore_access);
         
         rv = res.isResultType();
 
@@ -842,7 +848,7 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     public DefinesNamespace findNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation,
                                                                                                                   AmbiguousReference,
                                                                                                                   InvalidScopeResolution{
-        TypeDefinition n_type = this.findNamedType(name, from_scope, ignore_access);
+        TypeDefinition n_type = this.findTypeDefinition(name, from_scope, ignore_access);
         DefinesNamespace rv = isNameSpace(n_type);
 
         if(rv == null && this.belongsTo != null){
@@ -855,16 +861,16 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
     public DefinesNamespace findInnerNamespace(String name, DefinesNamespace from_scope, boolean ignore_access) throws AccessSpecViolation,
                                                                                                                        AmbiguousReference,
                                                                                                                        InvalidScopeResolution{
-        return isNameSpace(this.findNamedType(name, from_scope, ignore_access));
+        return isNameSpace(this.findTypeDefinition(name, from_scope, ignore_access));
     }
     
     @Override
-    public HashMap<String, TypeDefinition> getVisibleTypeNames() {
+    public Map<String, TypeDefinition> getVisibleTypeNames() {
         return this.visibleTypeNames;
     }
     
     @Override
-    public LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
+    public LookupResult localLookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
         
         Map<TypeDefinition, String> typeDefsErrors = new HashMap<TypeDefinition, String>();
         Map<ClassContentElement<? extends Type>, String> fieldErrors = new HashMap<ClassContentElement<? extends Type>, String>();

@@ -13,19 +13,21 @@ public class Namespace implements DefinesNamespace{
     
     String name;
     
-    protected HashMap<String, NamespaceElement<? extends Type>> allSymbols = new HashMap<String, NamespaceElement<? extends Type>>();
+    protected Map<String, NamespaceElement<? extends Type>> allSymbols = new HashMap<String, NamespaceElement<? extends Type>>();
     
-    protected HashMap<String, NamespaceElement<Type>> fields = null;
+    protected Map<String, NamespaceElement<Type>> fields;
     
-    protected HashMap<String, HashMap<Method.Signature, NamespaceElement<Method>>> methods = null;
+    protected Map<String, Map<Method.Signature, NamespaceElement<Method>>> methods;
     
-    protected HashMap<String, NamespaceElement<Namespace>> innerNamespaces = null;
+    protected Map<String, NamespaceElement<Namespace>> innerNamespaces;
     
-    protected HashMap<String, NamespaceElement<CpmClass>> innerTypes = null;
+    protected Map<String, NamespaceElement<CpmClass>> innerTypes;
     
-    protected HashMap<String, NamespaceElement<SynonymType>> innerSynonynms = null;
+    protected Map<String, NamespaceElement<SynonymType>> innerSynonynms;
     
-    protected HashMap<String, TypeDefinition> visibleTypeNames = null;
+    protected Map<String, TypeDefinition> visibleTypeNames;
+    
+    protected List<MethodDefinition> methodDefinitions;
     
     protected Set<Namespace> usingDirectives = null;
     
@@ -147,10 +149,7 @@ public class Namespace implements DefinesNamespace{
 
             @Override
             public boolean isStatic() {
-                /*
-                 * Everything is considered static
-                 */
-                return true;
+                return false;
             }
 
             @Override
@@ -274,9 +273,9 @@ public class Namespace implements DefinesNamespace{
                                                                                                DiffrentSymbol,
                                                                                                Redefinition{
         
-        if(methods == null) methods = new HashMap<String, HashMap<Method.Signature, NamespaceElement<Method>>>();
+        if(methods == null) methods = new HashMap<String, Map<Method.Signature, NamespaceElement<Method>>>();
         if(methods.containsKey(name) == true){
-            HashMap<Method.Signature, NamespaceElement<Method>> ms = methods.get(name);
+            Map<Method.Signature, NamespaceElement<Method>> ms = methods.get(name);
             if(ms.containsKey(m.getSignature())){
                 NamespaceElement<Method> old_m = ms.get(m.getSignature());
                 Method old = old_m.element;
@@ -419,6 +418,12 @@ public class Namespace implements DefinesNamespace{
         return rv;
     }
     
+    public void insertMethodDefinition(MethodDefinition methDef){
+        if(this.methodDefinitions == null) this.methodDefinitions = new ArrayList<MethodDefinition>();
+        
+        this.methodDefinitions.add(methDef);
+    }
+    
     public void setLineAndPos(int line, int pos){
         this.line = line;
         this.pos = pos;
@@ -462,14 +467,14 @@ public class Namespace implements DefinesNamespace{
     }
 
     @Override
-    public TypeDefinition isValidNamedType(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
+    public TypeDefinition isValidTypeDefinition(String name, boolean ignore_access) throws AccessSpecViolation, AmbiguousReference {
         TypeDefinition rv = null;
         DefinesNamespace curr_namespace = this;
         while(curr_namespace != null){
             /*
              * from_scope is null because all parents are namespaces.
              */
-            rv = curr_namespace.findNamedType(name, null, ignore_access);
+            rv = curr_namespace.findTypeDefinition(name, null, ignore_access);
             if(rv != null) break;
             curr_namespace = curr_namespace.getParentNamespace();
         }
@@ -477,10 +482,10 @@ public class Namespace implements DefinesNamespace{
     }
 
     @Override
-    public TypeDefinition findNamedType(String name, DefinesNamespace from_scope, boolean ignore_access) throws AmbiguousReference, AccessSpecViolation {
+    public TypeDefinition findTypeDefinition(String name, DefinesNamespace from_scope, boolean ignore_access) throws AmbiguousReference, AccessSpecViolation {
         TypeDefinition rv;
         
-        LookupResult res = this.lookup(name, from_scope, true, ignore_access);
+        LookupResult res = this.localLookup(name, from_scope, true, ignore_access);
         
         rv = res.isResultType();
         
@@ -505,7 +510,7 @@ public class Namespace implements DefinesNamespace{
                                                                                                                        InvalidScopeResolution {
         DefinesNamespace rv;
         
-        LookupResult res = this.lookup(name, from_scope, true, ignore_access);
+        LookupResult res = this.localLookup(name, from_scope, true, ignore_access);
         
         rv = res.doesResultDefinesNamespace();
         
@@ -513,7 +518,7 @@ public class Namespace implements DefinesNamespace{
     }
     
     @Override
-    public HashMap<String, TypeDefinition> getVisibleTypeNames() {
+    public Map<String, TypeDefinition> getVisibleTypeNames() {
         return this.visibleTypeNames;
     }
     
@@ -528,7 +533,7 @@ public class Namespace implements DefinesNamespace{
     }
     
     @Override
-    public LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
+    public LookupResult localLookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
         List<TypeDefinition> candidatesTypes = new ArrayList<TypeDefinition>();
         List<NamespaceElement<? extends Type>> candidateFields = new ArrayList<NamespaceElement<? extends Type>>();
         List<Map<Method.Signature, ? extends MemberElementInfo<Method>>> candidateMethods = new ArrayList<Map<Method.Signature, 

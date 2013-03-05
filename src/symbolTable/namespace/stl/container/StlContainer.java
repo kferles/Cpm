@@ -56,7 +56,7 @@ public abstract class StlContainer extends CpmClass {
         
         if(this.methods != null){
             for(String methodName : this.methods.keySet()){
-                HashMap< Signature, ClassContentElement<Method>> ms = this.methods.get(methodName);
+                Map< Signature, ClassContentElement<Method>> ms = this.methods.get(methodName);
                 for(Signature s : ms.keySet()){
                     ClassContentElement<Method> melem = ms.get(s);
                     Method m = melem.getElement();
