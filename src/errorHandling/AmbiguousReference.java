@@ -78,7 +78,7 @@ public class AmbiguousReference extends ErrorMessage {
      * Creates an error message given all the candidates for the referenced name.
      * 
      * @param candidatesTypes Candidates types for the referenced name.
-     * @param candidateNameSpaces Candidate namespaces for the referenced name. Can be null if the lookup is performed inside a class.
+     * @param candidateNameSpaces Candidate namespaces for the referenced name. Can be null if the localLookup is performed inside a class.
      * @param candidateFields Candidate fields for the referenced name.
      * @param referenced_name The referenced identifier.
      */
@@ -132,32 +132,34 @@ public class AmbiguousReference extends ErrorMessage {
                              + " error:                 " + memberInf.getElement().toString(referenced_name) + "\n");
         }
         
-        if(typesEmpty && namespacesEmpty && candidateFldsEmpty){
-            Map<Method.Signature, ? extends MemberElementInfo<Method>> meths = candidateMethods.get(0);
-            
-            Collection<? extends MemberElementInfo<Method>> methsInf = meths.values();
-            Iterator<? extends MemberElementInfo<Method>> it = methsInf.iterator();
-            MemberElementInfo<Method> methInf = it.next();
-            this.lines_errors.add(methInf.getFileName() + " line " + methInf.getLine() + ":" + methInf.getPos()
-                                  + " error: candidates are: " + methInf.getElement().toString(referenced_name) + "\n");
-            
-            while(it.hasNext()){
-                MemberElementInfo<Method> meth = it.next();
-                lines_errors.add(meth.getFileName() + " line " + meth.getLine() + ":" + meth.getPos()
-                                 + " error:                 " + meth.getElement().toString(referenced_name) + "\n");
-            }
-        }
-        
-        for(int i = (typesEmpty && namespacesEmpty && candidateFldsEmpty) ? 1 : 0 ; i < candidateMethods.size() ; ++i){
-            Map<Method.Signature, ? extends MemberElementInfo<Method>> meth = candidateMethods.get(i);
-            
-            Collection<? extends MemberElementInfo<Method>> methsInf = meth.values();
-            Iterator<? extends MemberElementInfo<Method>> it = methsInf.iterator();
-            
-            while(it.hasNext()){
+        if(candidateMethods != null){
+            if(typesEmpty && namespacesEmpty && candidateFldsEmpty){
+                Map<Method.Signature, ? extends MemberElementInfo<Method>> meths = candidateMethods.get(0);
+
+                Collection<? extends MemberElementInfo<Method>> methsInf = meths.values();
+                Iterator<? extends MemberElementInfo<Method>> it = methsInf.iterator();
                 MemberElementInfo<Method> methInf = it.next();
                 this.lines_errors.add(methInf.getFileName() + " line " + methInf.getLine() + ":" + methInf.getPos()
-                                      + " error:                 " + methInf.getElement().toString(referenced_name) + "\n");
+                                      + " error: candidates are: " + methInf.getElement().toString(referenced_name) + "\n");
+
+                while(it.hasNext()){
+                    MemberElementInfo<Method> meth = it.next();
+                    lines_errors.add(meth.getFileName() + " line " + meth.getLine() + ":" + meth.getPos()
+                                     + " error:                 " + meth.getElement().toString(referenced_name) + "\n");
+                }
+            }
+
+            for(int i = (typesEmpty && namespacesEmpty && candidateFldsEmpty) ? 1 : 0 ; i < candidateMethods.size() ; ++i){
+                Map<Method.Signature, ? extends MemberElementInfo<Method>> meth = candidateMethods.get(i);
+
+                Collection<? extends MemberElementInfo<Method>> methsInf = meth.values();
+                Iterator<? extends MemberElementInfo<Method>> it = methsInf.iterator();
+
+                while(it.hasNext()){
+                    MemberElementInfo<Method> methInf = it.next();
+                    this.lines_errors.add(methInf.getFileName() + " line " + methInf.getLine() + ":" + methInf.getPos()
+                                          + " error:                 " + methInf.getElement().toString(referenced_name) + "\n");
+                }
             }
         }
     }
