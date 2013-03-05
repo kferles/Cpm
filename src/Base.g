@@ -48,7 +48,7 @@ extern_class_definition
 	;
 
 class_declaration_list
-	: class_content_element*
+	: ^(CLASS_DECLARATION_LIST class_content_element*)
 	;
 
 class_content_element
