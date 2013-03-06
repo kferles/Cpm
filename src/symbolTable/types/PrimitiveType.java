@@ -51,12 +51,26 @@ public class PrimitiveType extends SimpleType {
         super(name);
         this.isConst = isConst;
         this.isVolatile = isVolatile;
-        if(name.equals("short int")) name = "short";
-        else if(name.equals("long int")) name = "long";
-        else if(name.equals("long long int")) name = "long long";
-        else if(name.equals("unsigned short int")) name = "unsigned short";
-        else if(name.equals("unsigned long int")) name = "unsigned long";
-        else if(name.equals("unsigned long long int")) name = "unsigned long long";
+        switch (name) {
+            case "short int":
+                name = "short";
+                break;
+            case "long int":
+                name = "long";
+                break;
+            case "long long int":
+                name = "long long";
+                break;
+            case "unsigned short int":
+                name = "unsigned short";
+                break;
+            case "unsigned long int":
+                name = "unsigned long";
+                break;
+            case "unsigned long long int":
+                name = "unsigned long long";
+                break;
+        }
         this.name = name;
         if(name.equals("bool") == true){
             this._type = PrimitiveType.bool;

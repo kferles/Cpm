@@ -60,6 +60,9 @@ public abstract class StlContainer extends CpmClass {
                 for(Signature s : ms.keySet()){
                     ClassContentElement<Method> melem = ms.get(s);
                     Method m = melem.getElement();
+                    /*
+                     * Return type cannot be null, because it's a method declaration not a constructor.
+                     */
                     Type t = m.getReturnType();
                     if(nonInst.unknownTypes.contains(t) == true){
                         String uknownTypeName = nonInst.getUnknownTypeName(t);
@@ -94,13 +97,13 @@ public abstract class StlContainer extends CpmClass {
             for(Method.Signature sign : this.constructors.keySet()){
                 ClassContentElement<Method> m_elem = this.constructors.get(sign);
                 Method m = m_elem.getElement();
-                Type t = sign.getReturnValue();
+                /*Type t = sign.getReturnValue();
                 
                 if(nonInst.unknownTypes.contains(t) == true){
                     String uknownTypeName = nonInst.getUnknownTypeName(t);
                     UserDefinedType newType = newTypes.get(uknownTypeName);
                     sign.setReturnValue(newType);
-                }
+                }*/
                 
                 if(sign.getParameters() != null){
                     ArrayList<Type> newParams = new ArrayList<Type>();

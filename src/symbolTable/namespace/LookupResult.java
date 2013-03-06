@@ -180,7 +180,7 @@ public class LookupResult {
             if(meth.containsKey(m.getSignature()) == true){
                 rv = meth.get(m.getSignature());
                 Method method = rv.getElement();
-                if(!m.identical(method)){
+                if(!m.equals(method)){
                     throw new NotMatchingPrototype(this.nameForLookup, m, meth, namespace);
                 }
             }

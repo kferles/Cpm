@@ -280,7 +280,7 @@ public class Namespace implements DefinesNamespace{
                 NamespaceElement<Method> old_m = ms.get(m.getSignature());
                 Method old = old_m.element;
                 String id = this.getFieldsFullName(name);
-                if(m.identicalParameters(old) == true && m.getReturnType().equals(old.getReturnType()) == true){
+                if(m.equals(old) == true){
                     if(m.isDefined() && old.isDefined()){
                         throw new Redefinition(id, m, line, pos, old, old_m.fileName, old_m.line, old_m.pos);
                     }

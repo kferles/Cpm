@@ -230,7 +230,7 @@ public class SymbolTable extends Namespace{
 
         Method.Signature signature = m.getSignature();
         Type rv = signature.getReturnValue();
-        rv = typeFromCache(rv);
+        rv = rv != null ? typeFromCache(rv) : null;
         signature.setReturnValue(rv);
         
         ArrayList<Type> params = signature.getParameters();

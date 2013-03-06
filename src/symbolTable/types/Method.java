@@ -156,10 +156,6 @@ public class Method extends Type{
         return this.s.identicalParams(o.s);
     }
     
-    public boolean identical(Method o){
-        return this.s.identicalParams(o.s) && this.s.returnValue.equals(o.s.returnValue);
-    }
-    
     /**
      * In case the argument is also an instance of Method class
      * equals returns true if the signatures are also equals and false otherwise.
@@ -174,8 +170,12 @@ public class Method extends Type{
         if(o instanceof Method){
             Method m = (Method)o;
             if(this.belongsTo != m.belongsTo) return false;
-            if(this.s.equals(m.s) == false) return false;
-            if(this.s.returnValue.equals(m.s.returnValue) == false) return false;
+            if(this.identicalParameters(m) == false) return false;
+            
+            Type tRv = this.s.returnValue, oRv = m.s.returnValue;
+            if((tRv == null && oRv != null) || (tRv != null && oRv == null)) return false;
+            if(tRv != null && oRv != null && !tRv.equals(oRv)) return false;
+            
             if(this.isAbstract != m.isAbstract) return false;
             if(this.isVirtual != m.isVirtual) return false;
             if(this.isConst != m.isConst) return false;
@@ -270,6 +270,9 @@ public class Method extends Type{
     }
     
     public boolean isOverriderFor(Method m) throws AmbiguousBaseClass{
+        Type tRv = this.s.returnValue, oRv = m.s.returnValue;
+        
+        if((tRv == null && oRv == null) || (tRv != null && oRv == null) || (tRv == null && oRv != null)) return false;
         return this.s.returnValue.subType(m.s.returnValue);
     }
     
