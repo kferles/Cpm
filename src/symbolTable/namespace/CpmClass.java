@@ -694,6 +694,43 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         
         this.methodDefinitions.add(methDef);
     }
+
+    public MemberElementInfo<Method> hasDeclaredConstructor(Method constructor) throws DefinitionOfImplicitlyDeclMeth, NotMatchingPrototype{
+        MemberElementInfo<Method> rv = null;
+        if(this.constructors == null){
+            if(constructor.getReturnType() == null && constructor.getSignature().getParameters() == null){
+                throw new DefinitionOfImplicitlyDeclMeth(this, false);
+            }
+            Map<Method.Signature, ClassContentElement<Method>> candidateMethod = new HashMap<Method.Signature, ClassContentElement<Method>>();
+            Method tempConstr = new Method(null, null, this, false, false, false,false, false);
+            candidateMethod.put(tempConstr.getSignature(), 
+                                new ClassContentElement<Method>(tempConstr, AccessSpecifier.Public, false, this.fileName, this.line, this.pos));
+            
+            throw new NotMatchingPrototype(this.name, constructor, candidateMethod, this);
+        }
+        
+        Method.Signature sign = constructor.getSignature();
+        if(this.constructors.containsKey(sign) == true){
+            ClassContentElement<Method> constrElem = this.constructors.get(sign);
+            Method constr = constrElem.element;
+            if(constructor.equals(constr)){
+                rv = constrElem;
+            }
+            else{
+                throw new NotMatchingPrototype(this.name, constructor, this.constructors, this);
+            }
+        }
+        return rv;
+    }
+
+    public MemberElementInfo<Method> hasDeclaredDestructor() throws DefinitionOfImplicitlyDeclMeth{
+
+        if(this.destructor == null){
+            throw new DefinitionOfImplicitlyDeclMeth(this, true);
+        }
+
+        return this.destructor;
+    }
     
     @Override
     public boolean equals(Object o){

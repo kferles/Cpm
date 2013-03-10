@@ -1,36 +1,3 @@
-/*
- ANSI C ANTLR v3 grammar
-
-Translated from Jutta Degener's 1995 ANSI C yacc grammar by Terence Parr
-July 2006.  The lexical rules were taken from the Java grammar.
-
-Jutta says: "In 1985, Jeff Lee published his Yacc grammar (which
-is accompanied by a matching Lex specification) for the April 30, 1985 draft
-version of the ANSI C standard.  Tom Stockfisch reposted it to net.sources in
-1987; that original, as mentioned in the answer to question 17.25 of the
-comp.lang.c FAQ, can be ftp'ed from ftp.uu.net,
-   file usenet/net.sources/ansi.c.grammar.Z.
-I intend to keep this version as cu discover discrepancies. Jutta Degener, 1995"
-
-Generally speaking, you need symbol table info to parse C; typedefs
-define types and then IDENTIFIERS are either types or plain IDs.  I'm doing
-the min necessary here tracking only type names.  This is a good example
-of the global scope (called Symbols).  Every rule that declares its usage
-of Symbols pushes a new copy on the stack effectively creating a new
-symbol scope.  Also note rule declaration declares a rule scope that
-lets any invoked rule see isTypedef boolean.  It's much easier than
-passing that info down as parameters.  Very lose to the current C Standard grammar as
-possible; please let me know if yoclean.  Rule
-direct_declarator can then easily determine whether the IDENTIFIER
-should be declared as a type name.
-
-I have only tested this on a single file, though it is 3500 lines.
-
-This grammar requires ANTLR v3.0.1 or higher.
-
-Terence Parr
-July 2006
-*/
 grammar Cpm;
 options {
     backtrack=true;
@@ -144,8 +111,12 @@ scope normal_mode_fail_level{
 	boolean failed;
 }
 
-scope parameters_id{
-	ArrayList<String> parameters_ids;
+scope constructorDef{
+	boolean isDefinition;
+}
+
+scope destructorDef{
+	boolean isDefinition;
 }
 
 @header {
@@ -261,11 +232,19 @@ import treeNodes4antlr.*;
 		return this.preproc.getOriginalFileLine(t.getLine());
 	}
 	
+	private void yield_warning(String warning, int line, int pos){
+		String fileName = this.getSourceName();
+		warning = fileName + " line " + line + ":" + pos + " " + warning;
+		System.err.print(this.preproc.getHeaderError());
+		System.err.println(warning);
+	}
+	
 	private void yield_error(String error, boolean need_file_name){
 		if(need_file_name){
 			String fileName = this.getSourceName();
 			error = fileName + " " + error;
 		}
+		System.err.print(this.preproc.getHeaderError());
 		System.err.println(error);
 	} 
 	
@@ -638,11 +617,6 @@ import treeNodes4antlr.*;
 	
 	private boolean isValidNamedType(ArrayList<SymbolTable.NestedNameInfo> chain, boolean explicitGlobalScope){
 		TypeDefinition t = null;
-
-		/*if(chain.size() == 1 && chain.get(0).getName().equals("list") == true) {
-			System.out.println("Here");
-			return true; 
-		}*/
 
 		if(chain.isEmpty() == true) {
 			return false;
@@ -1021,12 +995,13 @@ import treeNodes4antlr.*;
 	private void insertMethod(String declarator_id, Method m, int id_line, int id_pos, InClassDeclSpec class_specs, boolean insideFunctionDef){
 	
 		try{
-			if(class_specs.isExplicit == true){
+			if(class_specs != null && class_specs.isExplicit == true){
 				this.yield_error("error: only declarations of constructors can be 'explicit'", id_line, id_pos);
 			}
 			else{
-				m.setVirtual(class_specs.isVirtual);
-				this.symbolTable.insertMethod(declarator_id, m, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos, insideFunctionDef);
+				m.setVirtual(class_specs != null ? class_specs.isVirtual : false);
+				this.symbolTable.insertMethod(declarator_id, m, class_specs != null ? class_specs.isStatic : false,
+							      this.preproc.getCurrentFileName(), id_line, id_pos, insideFunctionDef);
 			}
 		}
 		catch(ConflictingDeclaration conflict){
@@ -1096,7 +1071,7 @@ translation_unit
 external_declaration
 //options {k=1;}
 	: namespace_definition
-	| ( declaration_specifiers declarator '{' )=> function_definition
+	| ( declaration_specifiers? declarator (':' ctor_initializer)? '{' )=> function_definition
 	| declaration
 	;
 
@@ -1140,13 +1115,16 @@ function_definition
 scope{
 	Method methods_type;
 	String identifier;
+	boolean isConstructorDefinition;
+	boolean isDestructorDefinition;
+	MethodDefinition methDef;
 }
 scope normal_mode_fail_level;
-scope parameters_id;
 @init{
-	$parameters_id::parameters_ids = null;
 	$function_definition::methods_type = null;
 	$function_definition::identifier = null;
+	$function_definition::isConstructorDefinition = false;
+	$function_definition::isDestructorDefinition = false;
 
 	$normal_mode_fail_level::failed = false;
 	
@@ -1154,7 +1132,7 @@ scope parameters_id;
 }
 	: {
 		MethodDefinition methDef = new MethodDefinition(this.symbolTable.getCurrentNamespace());
-		
+		$function_definition::methDef = methDef;
 		try{
 			this.symbolTable.insertMethDefinition(methDef);
 		}
@@ -1167,7 +1145,7 @@ scope parameters_id;
 	  	this.symbolTable.setCurrentScope(methDef);
 	  	this.symbolTable.setCurrentAccess(null);
 	  }
-	  simple_declaration  // ANSI style only
+	  simple_declaration (':' init=ctor_initializer)?  // ANSI style only
 	  {
 	  	Method m = $function_definition::methods_type;
 	  	if(m == null){
@@ -1178,13 +1156,25 @@ scope parameters_id;
 	  		this.normal_mode = false;
 	  		$normal_mode_fail_level::failed = true;
 	  	}
+	  	else{
+	  		if($function_definition::isConstructorDefinition == false && $init.tree != null){
+	  			Token err_tok = $init.start;
+	  			this.yield_error("error: only constructors take member initializers", this.fixLine(err_tok), err_tok.getCharPositionInLine());
+	  		}
+	  	}
 	  }
 	  compound_statement turn_on_normal_mode 
 	  {
 	  	this.symbolTable.endScope();
 	  }
 
-	  -> ^(METHOD<MethodToken>[$function_definition::methods_type] compound_statement)
+	  -> ^(METHOD<MethodToken>[$function_definition::methods_type, $function_definition::methDef, 
+	  			   $function_definition::isConstructorDefinition, $function_definition::isDestructorDefinition] 
+	  											      ctor_initializer? 
+	  											      /*
+	  											       * optional in case normal mode is false
+	  											       */
+	  											      compound_statement?)
 	;
 
 declaration
@@ -1202,7 +1192,7 @@ scope{
 	| ('typedef'? struct_union_or_class IDENTIFIER '{') => t='typedef'? { if($t != null) $declaration::isTypedef = true; } struct_union_or_class_definition ';'!
 	| ('typedef'? struct_union_or_class nested_name_id ':' 'public') => t='typedef'? { if($t != null) $declaration::isTypedef = true; } extern_class_definition ';'!
 	| ('typedef'? struct_union_or_class nested_name_id '{') => t='typedef'? { if($t != null) $declaration::isTypedef = true; } extern_class_definition ';'!
-	| t='typedef'? enum_definition ';'!
+	| t='typedef'? { if($t != null) $declaration::isTypedef = true; } enum_definition ';'!
 	| 'typedef' { $declaration::isTypedef = true; } simple_declaration ';'!
 	| simple_declaration ';'!
 	| using_directive ';'!
@@ -1333,9 +1323,6 @@ scope{
 	  }
 	;
 
-/*
- * TODO: declaration_specifiers ? //for constructors and destructor defs ...
- */
 simple_declaration
 scope{
 	boolean possible_fwd_decl;
@@ -1346,15 +1333,20 @@ scope{
 	String declSpecError;
 	Type declSpecT;
 	InClassDeclSpec declSpecs;
+	boolean noDeclSpecifiers;
 }
 @init{
 	$simple_declaration::possible_fwd_decl = false;
 	$simple_declaration::inf = null;
 	$simple_declaration::tag = null;
+	$simple_declaration::noDeclSpecifiers = false;
 }
  	:
-	  declaration_specifiers
+	  declaration_specifiers?
 	  {
+	  	if($declaration_specifiers.tree == null){
+	  		$simple_declaration::noDeclSpecifiers = true;
+	  	}
 	  	$simple_declaration::declSpecError = $declaration_specifiers.error != null ? $declaration_specifiers.error + $declaration_specifiers.init_decl_err : null;
 	  	$simple_declaration::declSpecT = $declaration_specifiers.t;
 	  	$simple_declaration::declSpecs = $declaration_specifiers.class_specs;
@@ -1523,6 +1515,8 @@ init_declarator [String error, Type data_type, InClassDeclSpec class_specs] retu
 scope{
 	boolean isExternDef;
 	DefinesNamespace namespace; 
+	boolean isDestructor;
+	boolean isMethodDecl;
 }
 scope declarator_strings;
 scope decl_infered;
@@ -1533,11 +1527,13 @@ scope decl_id_info;
 	$decl_infered::declarator = null;
 	$init_declarator::isExternDef = false;
 	$init_declarator::namespace = null;
+	$init_declarator::isDestructor = false;
+	$init_declarator::isMethodDecl = false;
 }
 	: declarator { not_null_decl_id($declarator_strings::dir_decl_identifier, $declarator_strings::dir_decl_error, $declarator.start); } 
 	  (  eq = '=' initializer
 	   | lpar = '(' argument_expression_list ')' )?
-	  {	//todo: error for typedef with initializer
+	  {	//todo: error for typedef with initializer && externdef ...
 	  	//todo: typedef + extern def
 
 	  	boolean externDef = $init_declarator::isExternDef;
@@ -1546,13 +1542,22 @@ scope decl_id_info;
 	  	DefinesNamespace nameSp = $init_declarator::namespace;
 		LookupResult res = null;
 		String id = $declarator_strings::dir_decl_identifier;
-
+		boolean isNameSpClass = false;
 		if(externDef){
 	  		DefinesNamespace curr_scope = this.symbolTable.getCurrentNamespace();
-
+	  		
 			if(nameSp != null){
+				if(nameSp instanceof CpmClass) isNameSpClass = true;
 	  			res = nameSp.localLookup(id, curr_scope, false, true);
-	  			isNameSpEnclosed = nameSp.isEnclosedInNamespace(curr_scope);
+	  			
+	  			DefinesNamespace current;
+	  			
+	  			if($function_definition.size() > 0)
+	  				current = ((MethodDefinition) curr_scope).getDefinedInNamespace();
+	  			else
+	  				current = curr_scope;
+	  			
+	  			isNameSpEnclosed = nameSp.isEnclosedInNamespace(current);
 	  		}
 	  		
 		}
@@ -1561,12 +1566,19 @@ scope decl_id_info;
 	  	if($declarator_strings::dir_decl_identifier != null){
 
 	  		DeclaratorInferedType decl_inf_t = $decl_infered::declarator;
-		  	if($data_type != null){
+		  	if($data_type != null 
+		  	   ||
+		  	   /*possibly defining constructor/destructor outside the class definition*/ 
+		  	   (decl_inf_t != null && 
+		  	    decl_inf_t.m_pend != null && 
+		  	    externDef == true && 
+		  	    isNameSpClass &&
+		  	    nameSp.getName().equals(id))){
+
 			  	String declarator_id = $declarator_strings::dir_decl_identifier;
 			  	int id_line = $decl_id_info::line;
 			  	int id_pos = $decl_id_info::pos;
 			  	if(decl_inf_t == null) {
-			  		System.out.println($data_type.toString(declarator_id));
 			  		$declType = $data_type;
 			  		if($declaration.size() > 0 && $declaration::isTypedef == true){
 			  			this.insertSynonym(declarator_id, $data_type, id_line, id_pos, $class_specs);
@@ -1583,6 +1595,7 @@ scope decl_id_info;
 			  			decl_inf_t.p_pend.setPointsTo($data_type);
 			  		}
 			  		else if(decl_inf_t.m_pend != null){
+			  			$init_declarator::isMethodDecl = true;
 			  			decl_inf_t.m_pend.getSignature().setReturnValue($data_type);
 			  		}
 			  		else if(decl_inf_t.ar_pend != null){
@@ -1592,8 +1605,6 @@ scope decl_id_info;
 			  		
 			  		if(err_inDeclarator == false){
 				  		if(decl_inf_t.p_rv != null){
-				  			//System.out.println(declarator_id);
-				  			System.out.println(decl_inf_t.p_rv.toString(declarator_id));
 				  			$declType = decl_inf_t.p_rv;
 				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
 					  			this.insertSynonym(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
@@ -1606,7 +1617,6 @@ scope decl_id_info;
 				  		}
 				  		else if(decl_inf_t.m_rv != null){
 				  			resultNotMethod = false;
-				  			System.out.println(decl_inf_t.m_rv.toString(declarator_id));
 				  			$declType = decl_inf_t.m_rv;
 				  			if(($struct_union_or_class_definition.size() > 0 && $class_declaration_list.size() == 0) ||
 				  			    $extern_class_definition.size() > 0 || $enum_definition.size() > 0 ){
@@ -1626,7 +1636,38 @@ scope decl_id_info;
 							  			MemberElementInfo<Method> mRes = null;
 
 								  		try{
-							  				mRes = res.isResultMethod(decl_inf_t.m_rv, nameSp);
+								  			if($data_type != null) {
+								  				if($init_declarator::isDestructor == false)
+							  						mRes = res.isResultMethod(decl_inf_t.m_rv, nameSp);
+							  					else
+							  						this.yield_error("error: return type specification for destructor invalid",
+							  								 id_line, id_pos);
+							  				}
+							  				else {
+							  					/*
+							  					 * cannot fail, because isNameSpClass flag is true ...
+							  					 */
+							  					CpmClass _class = (CpmClass) nameSp;
+							  					
+							  					if($init_declarator::isDestructor == false){
+							  						mRes = _class.hasDeclaredConstructor(decl_inf_t.m_pend);
+							  						
+							  						if($function_definition.size() > 0)
+							  							$function_definition::isConstructorDefinition = true;
+							  					}
+							  					else{
+							  						if(decl_inf_t.m_pend.getSignature().getParameters() != null){
+							  							this.yield_error("error: destructors may not have parameters",
+							  									 id_line, id_pos);
+							  						}
+							  						
+							  						mRes = _class.hasDeclaredDestructor();
+							  						
+							  						if($function_definition.size() > 0)
+							  							$function_definition::isDestructorDefinition = true;
+							  					}
+							  				}
+							  					
 							  			}
 							  			catch(AmbiguousReference ambiguous){
 							  				yield_error(ambiguous.getRefError(), true);
@@ -1641,6 +1682,9 @@ scope decl_id_info;
 							  				yield_error(noMatch.getMessage(), id_line, id_pos);
 							  				System.err.print(noMatch.makeMessage());
 							  			}
+							  			catch(DefinitionOfImplicitlyDeclMeth defOfImpl){
+				  							this.yield_error(defOfImpl.getMessage(), id_line, id_pos);
+				  						}
 							  			
 							  			if(mRes != null){
 							  				Method m = mRes.getElement();
@@ -1658,7 +1702,12 @@ scope decl_id_info;
 							  						}
 							  					}
 							  					else{
-							  						String methFullName = SymbolTable.getFieldsFullName(nameSp, id);
+							  						String err_id;
+							  						if($init_declarator::isDestructor)
+							  							err_id = '~' + id;
+							  						else
+							  							err_id = id;
+							  						String methFullName = SymbolTable.getFieldsFullName(nameSp, err_id);
 							  						this.yield_error("error: declaration of '" + m.toString(methFullName) + "' outside of class is not definition",
 							  								  id_line, id_pos);
 							  					}
@@ -1672,7 +1721,9 @@ scope decl_id_info;
 							  									 id_line,
 							  									 id_pos);
 													}
-													String methFullName = SymbolTable.getFieldsFullName(nameSp, id);
+													
+													String err_id = $init_declarator::isDestructor ? '~' + id : id;
+													String methFullName = SymbolTable.getFieldsFullName(nameSp, err_id);
 													Redefinition redef = new Redefinition(methFullName, decl_inf_t.m_rv, id_line, id_pos,
 																	      m, mRes.getFileName(), mRes.getLine(), mRes.getPos());
 													this.yield_error(redef.getMessage(), true);
@@ -1685,13 +1736,8 @@ scope decl_id_info;
 												}
 											}
 							  			}
-							  			else{
-							  				externDef = false;
-							  			}
 								  	}
-								  	else if (externDef && res == null){
-								  		externDef = false;
-								  	}
+
 					  				//if(this.symbolTable.isCurrentNamespaceClass() == true){
 					  				if($function_definition.size() > 0){
 					  					decl_inf_t.m_rv.setIsDefined();
@@ -1714,7 +1760,6 @@ scope decl_id_info;
 				  		}
 				  		else if(decl_inf_t.ar_rv != null){
 				  			CpmArray ar = decl_inf_t.ar_rv;
-				  			System.out.println(ar.toString(declarator_id));
 				  			$declType = ar;
 				  			if($declaration.size() > 0 && $declaration::isTypedef == true){
 					  			this.insertSynonym(declarator_id, ar, id_line, id_pos, $class_specs);
@@ -1811,9 +1856,9 @@ scope decl_id_info;
 	  	}
 	  }
 	  
-	  -> { $eq == null && $lpar == null }? ^(DECLARATION<DeclarationToken>[$declType] declarator)
-	  -> { $lpar == null }? ^(DECLARATION<DeclarationToken>[$declType] ^('=' declarator initializer))
-	  -> ^(DECLARATION<DeclarationToken>[$declType] argument_expression_list)
+	  -> { $eq == null && $lpar == null }? ^(DECLARATION<DeclarationToken>[$declType, $init_declarator::isMethodDecl] declarator)
+	  -> { $lpar == null }? ^(DECLARATION<DeclarationToken>[$declType, $init_declarator::isMethodDecl] ^('=' declarator initializer))
+	  -> ^(DECLARATION<DeclarationToken>[$declType, $init_declarator::isMethodDecl] argument_expression_list)
 	  //-> ^({new CommonToken(DECL, "DECL")} declarator)
 	  //-> ^(DECL declarator)
 	;
@@ -1916,7 +1961,6 @@ type_specifier
 	| enum_specifier
 	;
 	catch[FailedPredicateException ex]{
-		//System.out.println("Here");
 	}
 
 	
@@ -2144,7 +2188,7 @@ scope normal_mode_fail_level;
 	  	}
 	  }
 	   // todo : init_declarator_list parameters
-  	   '{' class_declaration_list '}' 
+  	   '{' class_declaration_list stopT = '}' 
   	  {
   	  	this.symbolTable.endScope();
   	  }
@@ -2157,10 +2201,13 @@ scope normal_mode_fail_level;
   	  				 this.fixLine(idTok),
   	  				 idTok.getCharPositionInLine());
   	  	}
+  	  	else if($init_declarator_list.tree == null && $declaration::isTypedef){
+  	  		this.yield_warning("warning: 'typedef' was ignored in this declaration", this.fixLine($stopT), $stopT.getCharPositionInLine());
+  	  	}
   	  }
   	  turn_on_normal_mode
   	  
-  	  -> ^(STR_UN_CLASS_DEFINITION<StrUnClassDefToken>[$struct_union_or_class_definition::_class] class_declaration_list? init_declarator_list?)
+  	  -> ^(STR_UN_CLASS_DEFINITION<StrUnClassDefToken>[$struct_union_or_class_definition::_class] class_declaration_list? /*optional in case norma_mode is false*/ init_declarator_list?)
 	;
 	
 extern_class_definition
@@ -2265,7 +2312,7 @@ scope normal_mode_fail_level;
 		
 		$extern_class_definition::_class = _class;
 	  }
-	 '{' class_declaration_list '}' 
+	 '{' class_declaration_list stopT = '}' 
 	  {
   	  	this.symbolTable.endScope();
   	  }
@@ -2278,10 +2325,13 @@ scope normal_mode_fail_level;
   	  				 this.fixLine(idTok),
   	  				 idTok.getCharPositionInLine());
   	  	}
+  	  	else if($init_declarator_list.tree == null && $declaration::isTypedef){
+  	  		this.yield_warning("warning: 'typedef' was ignored in this declaration", this.fixLine($stopT), $stopT.getCharPositionInLine());
+  	  	}
   	  }
   	  turn_on_normal_mode
 
-  	  -> ^(EXTERN_CLASS_DEFINITION<StrUnClassDefToken>[$extern_class_definition::_class] class_declaration_list? init_declarator_list?)
+  	  -> ^(EXTERN_CLASS_DEFINITION<StrUnClassDefToken>[$extern_class_definition::_class] class_declaration_list? /*optional in case normal_mode is false*/ init_declarator_list?)
 	;
 
 enum_definition
@@ -2336,7 +2386,7 @@ scope{
                 	this.yield_error(invalidMethDecl.getMessage(), line, pos);
                 }
 	  }
-	  '{' enumerator_list '}' init_declarator_list[null, $enum_definition::enumeration, new InClassDeclSpec(false, false, false)]?
+	  '{' enumerator_list stopT = '}' init_declarator_list[null, $enum_definition::enumeration, new InClassDeclSpec(false, false, false)]?
 	  {
   	  	if($init_declarator_list.tree != null && $init_declarator_list.newTypeInRv == true){
   	  		
@@ -2344,6 +2394,9 @@ scope{
   	  		this.yield_error("note: perhaps a semicolon is missing after the definition of '" + idTok.getText() + "'",
   	  				 this.fixLine(idTok),
   	  				 idTok.getCharPositionInLine());
+  	  	}
+  	  	else if($init_declarator_list.tree == null && $declaration::isTypedef){
+  	  		this.yield_warning("warning: 'typedef' was ignored in this declaration", this.fixLine($stopT), $stopT.getCharPositionInLine());
   	  	}
   	  }
   	  
@@ -2481,10 +2534,39 @@ class_content_element
 constructor
 //TODO: fix error message, when ctor_initializer is not with a constructor definition
 //	it's realy ugly ...
+scope constructorDef;
+scope normal_mode_fail_level;
+@init{
+  $normal_mode_fail_level::failed = false;
+  $constructorDef::isDefinition = false;
+}
 	: construcctor_head ';' -> CONSTRUCTOR<ConstructorToken>[$construcctor_head.m]
-	| construcctor_head (':' ctor_initializer)?
+	| 
+	  {
+	  	$constructorDef::isDefinition = true;
+	  	DefinesNamespace in = this.symbolTable.getCurrentNamespace();
+		MethodDefinition methDef = new MethodDefinition(in);
+		methDef.setBelongsTo(in);
+
+		try{
+			this.symbolTable.insertMethDefinition(methDef);
+		}
+		catch(InvalidMethodLocalDeclaration invalidMethDecl){
+			Token nextTok = input.LT(1);
+			this.yield_error(invalidMethDecl.getMessage(), this.fixLine(nextTok), nextTok.getCharPositionInLine());
+			this.normal_mode = false;
+			$normal_mode_fail_level::failed = true;
+		}
+	  	this.symbolTable.setCurrentScope(methDef);
+	  	this.symbolTable.setCurrentAccess(null);
+	  }
+	  construcctor_head (':' ctor_initializer)?
 	  {$construcctor_head.m.setIsDefined();}
-	  compound_statement -> ^(CONSTRUCTOR<ConstructorToken>[$construcctor_head.m] ctor_initializer? compound_statement)
+	  compound_statement turn_on_normal_mode
+	  {
+	    this.symbolTable.endScope();
+	  }
+	  -> ^(CONSTRUCTOR<ConstructorToken>[$construcctor_head.m] ctor_initializer? compound_statement? /*optional in case normal mode is false*/)
 	;
 
 ctor_initializer
@@ -2506,10 +2588,8 @@ mem_initializer_id
 	;
 
 construcctor_head returns [Method m]
-scope parameters_id;
 @init{
 	$m = null;
-	$parameters_id::parameters_ids = null;
 }
 	: exp = 'explicit'? className '(' parameter_type_list? ')'
 	  {
@@ -2522,23 +2602,63 @@ scope parameters_id;
 	     	    hasVarArgs = $parameter_type_list.params.hasVarargs;
 	        } 
 	     
-	     	Method m1 = new Method(null, param, this.symbolTable.getCurrentNamespace(), false, false, false, false, hasVarArgs);
+	     	DefinesNamespace parent;
+	     	if($constructorDef::isDefinition){
+	     		parent = ((MethodDefinition) this.symbolTable.getCurrentNamespace()).getDefinedInNamespace();
+	     	}
+	     	else{
+	     		parent = this.symbolTable.getCurrentNamespace();
+	     	}
+
+	     	Method m1 = new Method(null, param, parent, false, false, false, false, hasVarArgs);
 	     	if($exp != null) m1.setExplicit();
 	     	$m = m1;
 	     	this.symbolTable.insertConstructor($m, this.fixLine(des_id), des_id.getCharPositionInLine());
+	     	
+	     	if($constructorDef::isDefinition){
+	     		((MethodDefinition) this.symbolTable.getCurrentNamespace()).setMethodSign(m1);
+	     	}
 	     }
 	     catch(CannotBeOverloaded cBeoverld){
-                	this.yield_error(cBeoverld.getMessage(), true);
-                	this.yield_error(cBeoverld.getFinalError(), false);
+                this.yield_error(cBeoverld.getMessage(), true);
+                this.yield_error(cBeoverld.getFinalError(), false);
              }
 	  }
 	;
 	
 destructor
+scope destructorDef;
+scope normal_mode_fail_level;
+@init{
+  $normal_mode_fail_level::failed = false;
+  $destructorDef::isDefinition = false;
+}
 	: destructor_head ';'  -> DESTRUCTOR<DestructorToken>[$destructor_head.m]
-	| destructor_head
-	  {$destructor_head.m.setIsDefined();}
-	  compound_statement -> ^(DESTRUCTOR<DestructorToken>[$destructor_head.m] compound_statement)
+	| {
+		$destructorDef::isDefinition = true;
+		DefinesNamespace in = this.symbolTable.getCurrentNamespace();
+		MethodDefinition methDef = new MethodDefinition(in);
+		methDef.setBelongsTo(in);
+
+		try{
+			this.symbolTable.insertMethDefinition(methDef);
+		}
+		catch(InvalidMethodLocalDeclaration invalidMethDecl){
+			Token nextTok = input.LT(1);
+			this.yield_error(invalidMethDecl.getMessage(), this.fixLine(nextTok), nextTok.getCharPositionInLine());
+			this.normal_mode = false;
+			$normal_mode_fail_level::failed = true;
+		}
+	  	this.symbolTable.setCurrentScope(methDef);
+	  	this.symbolTable.setCurrentAccess(null);
+	  }
+	  destructor_head
+	  {if($destructor_head.m != null) $destructor_head.m.setIsDefined();}
+	  compound_statement turn_on_normal_mode
+	  {
+	    this.symbolTable.endScope();
+	  }
+	  -> ^(DESTRUCTOR<DestructorToken>[$destructor_head.m] compound_statement? /*optional in case normal mode is false*/)
 	;
 	
 destructor_head returns [Method m]
@@ -2551,15 +2671,30 @@ destructor_head returns [Method m]
 		     Token des_id = $className.start;
 		     if($parameter_type_list.tree != null){
 		     	this.yield_error("error: destructors may not have parameters", this.fixLine(des_id), des_id.getCharPositionInLine());
+		     	$normal_mode_fail_level::failed = true;
+		     	this.normal_mode = false;
 		     }
 		     else{
-		        /*
+		     	DefinesNamespace parent;
+		     	
+		     	if($destructorDef::isDefinition){
+		     		parent = ((MethodDefinition) this.symbolTable.getCurrentNamespace()).getDefinedInNamespace();		     		
+		     	}
+		     	else{
+		     		parent = this.symbolTable.getCurrentNamespace();
+		     	}
+
+		     	//CpmClass _class = (CpmClass) this.symbolTable.getCurrentNamespace();
+		     	Method m1 = new Method(null, null, parent, $virt == null ? false : true, false, false, false, false);
+			$m = m1;
+			
+			if($destructorDef::isDefinition){
+				((MethodDefinition) this.symbolTable.getCurrentNamespace()).setMethodSign(m1);
+			}
+			/*
 		         * cast cannot fail because of the semantic predicate in the className rule
 		         */
-		     	CpmClass _class = (CpmClass) this.symbolTable.getCurrentNamespace();
-		     	Method m1 = new Method(null, null, _class, $virt == null ? false : true, false, false, false, false);
-			$m = m1;
-	     	     	_class.insertDestructor($m, this.symbolTable.getCurrentAccess(), this.fixLine(des_id), des_id.getCharPositionInLine());
+	     	     	((CpmClass)parent).insertDestructor($m, this.symbolTable.getCurrentAccess(), this.fixLine(des_id), des_id.getCharPositionInLine());
 	
 	     	     }
 	     }
@@ -2572,6 +2707,8 @@ destructor_head returns [Method m]
 
 className
 	: {normal_mode == false}? IDENTIFIER
+	| { $constructorDef.size() > 0 && $constructorDef::isDefinition }? IDENTIFIER
+	| { $destructorDef.size() > 0 && $destructorDef::isDefinition }? IDENTIFIER
 	| {(symbolTable.isCurrentNamespaceClass() && input.LT(1).getText().equals(symbolTable.getCurrentNamespace().getName()))}? IDENTIFIER
 	;
 
@@ -2753,6 +2890,7 @@ direct_declarator
 			if($init_declarator.size() > 0){
 				$init_declarator::isExternDef = true;
 				$init_declarator::namespace = $nested_identifier.namespace;
+				$init_declarator::isDestructor = $nested_identifier.isDestructorName;
 			}
 			
 			if($function_definition.size() > 0){
@@ -2776,26 +2914,10 @@ direct_declarator
 			   direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error); } 
 			   
 			   -> IDENTIFIER
-			//{
-			//if ($declaration.size()>0&& ($declaration::isTypedef)) {
-			//	$Symbols::types.add($IDENTIFIER.text);
-			//	System.out.println("define type "+$IDENTIFIER.text);
-			//}
-			//}
 		|	'(' dcl = declarator ')' -> declarator
 		)
         	declarator_suffix*
 	;
-	/*catch [RecognitionException ex]{
-		if($init_declarator_list.size() > 0 && $init_declarator_list::first ){
-			if($declarator_strings::dir_decl_error == null) throw ex;
-			//System.out.println($declarator_strings::dir_decl_error);
-			if($declarator_strings::dir_decl_error.equals("error: two or more data types in declaration of") == false) throw ex;
-			$init_declarator_list::first = false;
-			this.paraphrases.push("error: two or more data types in declaration");
-		}
-		throw ex;
-	}*/
 
 declarator_suffix
 scope cv_qual;
@@ -2862,9 +2984,6 @@ scope cv_qual;
 			
 			if(d_inf_t == null){
 				$decl_infered::declarator = new DeclaratorInferedType(m);
-				if($parameter_type_list.tree != null && $parameters_id.size() > 0){
-					$parameters_id::parameters_ids = ps.ids;
-				}
 			}
 			else{
 				try{
@@ -2975,7 +3094,9 @@ scope decl_id_info;
 	$declarator_strings::dir_decl_error = null;
 	$decl_infered::declarator = null;
 }
-	: { $parameter_declaration::p = new Param(); }
+	:  
+	  /*todo: error if declaration is externDef*/
+	  { $parameter_declaration::p = new Param(); }
 	  declaration_specifiers
 	  {
 	  	if($declaration_specifiers.error != null){
@@ -3024,7 +3145,9 @@ scope decl_id_info;
 		  		}
 		  	}
 
-	  		if($function_definition.size() > 0 && $param != null){
+	  		if(($function_definition.size() > 0 ||
+	  		    ($constructorDef.size() > 0 && $constructorDef::isDefinition)) 
+	  		    && $param != null){
 
 	  			String id = $declarator_strings::dir_decl_identifier;
 				MethodDefinition methDef = (MethodDefinition) this.symbolTable.getCurrentNamespace();
@@ -3505,6 +3628,7 @@ jump_statement	: /*'goto' IDENTIFIER ';'
 	
 //C+- aux rules (different rules to adjust C's syntax)
 
+
 id_expression
 	: global_scope = '::'? IDENTIFIER id_expression_tail?
 	-> { $global_scope != null }? ^(ID_EXPRESSION<IdExpressionToken> '::' id_expression_tail?)
@@ -3519,17 +3643,26 @@ id_expression_tail
 	;
 
 
-nested_identifier returns [DefinesNamespace namespace]
+nested_identifier returns [DefinesNamespace namespace, boolean isDestructorName]
 scope{
   DefinesNamespace fromScope;
   DefinesNamespace runner;
+  boolean destructorName;
 }
 @init{
+	$nested_identifier::destructorName = false;
 	$namespace = null;
 }
 	: global_scope = '::'? IDENTIFIER
 	  {
 	  	DefinesNamespace currentScope = this.symbolTable.getCurrentNamespace();
+
+	  	if(   $function_definition.size() > 0
+	  	   || ($constructorDef.size() > 0 && $constructorDef::isDefinition)
+	  	   || ($destructorDef.size() > 0 && $destructorDef::isDefinition)){
+	  		currentScope = ((MethodDefinition) currentScope).getDefinedInNamespace();
+	  	}
+	  	
 	  	$nested_identifier::fromScope = currentScope;
 	  	DefinesNamespace runner = null;
 	  	String id = $IDENTIFIER.text;
@@ -3560,6 +3693,7 @@ scope{
 	  '::' nested_identifier_tail
 	  {
 	  	$namespace = $nested_identifier::runner;
+	  	$isDestructorName = $nested_identifier::destructorName;
 	  }
 	  -> { $global_scope != null}? ^(NESTED_IDENTIFIER<NestedIdentifierToken>[$namespace, $declarator_strings::dir_decl_identifier] '::' IDENTIFIER ^('::' nested_identifier_tail))
 	  -> ^(NESTED_IDENTIFIER<NestedIdentifierToken>[$namespace, $declarator_strings::dir_decl_identifier] IDENTIFIER '::' nested_identifier_tail)
@@ -3574,11 +3708,10 @@ nested_identifier_tail
 		  		String id = $IDENTIFIER.text;
 		  		next = $nested_identifier::runner.findInnerNamespace(id, $nested_identifier::fromScope, true);
 		  	}
-		  	catch(AmbiguousReference ambiguous){ //System.out.println("HERE " + ambiguous.getRefError());
+		  	catch(AmbiguousReference ambiguous){
 		  		ambiguous.referenceTypeError(this.fixLine($IDENTIFIER), $IDENTIFIER.pos);
 			  	yield_error(ambiguous.getRefError(), true);
 				System.err.print(ambiguous.getMessage());
-				//yield_error(ambiguous.getLastLine(), true);
 		  	}
 		  	catch(AccessSpecViolation access_viol){
 		  		yield_error(access_viol.getMessage(), false);
@@ -3592,7 +3725,7 @@ nested_identifier_tail
 	  }
 	  '::' nested_identifier_tail
 	  -> ^(IDENTIFIER '::' nested_identifier_tail)
-	| IDENTIFIER
+	| destrName = '~'? IDENTIFIER
 	  {
 	  	$declarator_strings::dir_decl_identifier = $IDENTIFIER.text;
 		if($parameter_declaration.size() > 0) $parameter_declaration::p.id = $IDENTIFIER.text;
@@ -3600,10 +3733,13 @@ nested_identifier_tail
 			$decl_id_info::line = this.fixLine($IDENTIFIER);
 			$decl_id_info::pos = $IDENTIFIER.pos;
 		}
+		
+		if($destrName != null) $nested_identifier::destructorName = true;
 
 		direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error);
 	  }
-	  -> IDENTIFIER
+	  -> {$destrName == null}? IDENTIFIER
+	  -> ^($destrName IDENTIFIER)
 	;
 	
 //Preprocessor

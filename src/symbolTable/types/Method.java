@@ -206,7 +206,7 @@ public class Method extends Type{
             end = start.substring(rParenIndex, start.length());
             start = new StringBuilder(start.substring(0, rParenIndex));
         }
-        start.append(" ");
+        if(s.returnValue != null) start.append(" ");
         start.append(aggr);
         aggr = start.append("(");
         if(s.parameters != null){

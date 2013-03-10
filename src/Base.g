@@ -26,7 +26,7 @@ namespace_definition
 
 
 function_definition
-	: ^(METHOD<MethodToken> compound_statement)
+	: ^(METHOD<MethodToken> ctor_initializer? compound_statement)
 	;
 
 declaration
@@ -417,6 +417,7 @@ nested_identifier
 nested_identifier_tail
 	: ^(IDENTIFIER '::' nested_identifier_tail)
 	| IDENTIFIER
+	| ^('~' IDENTIFIER)
 	;
 
 //Preprocessor

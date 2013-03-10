@@ -282,7 +282,19 @@ public class SymbolTable extends Namespace{
             signature.setParameters(newParams);
         }
         
-        this.current_class.insertConstructor(m, this.current_access, line, pos);
+        switch(this.type){
+            case Class:
+                this.current_class.insertConstructor(m, this.current_access, line, pos);
+                break;
+            case Method:
+                /*
+                 * constructor defined inside class, so previous scope must be a class. 
+                 */
+                ScopeStackElem prevScope = this.scopes.peek();
+                CpmClass _class = (CpmClass) prevScope.scope;
+                _class.insertConstructor(m, prevScope.access, line, pos);
+                break;
+        }
     }
 
     public CpmClass insertInnerType(String name, CpmClass cpm_class, boolean isStatic) throws SameNameAsParentClass,

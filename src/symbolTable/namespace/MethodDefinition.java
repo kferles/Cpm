@@ -345,13 +345,13 @@ public class MethodDefinition implements DefinesNamespace{
         boolean rv = false;
         DefinesNamespace curr = this.definedIn;
 
-        while(curr != null){
+        do{
             if(curr == namespace){
                 rv = true;
                 break;
             }
             curr = curr.getParentNamespace();
-        }
+        }while(curr != null);
         return rv;
     }
     
@@ -360,7 +360,7 @@ public class MethodDefinition implements DefinesNamespace{
      */
     
     public void insertLocalDeclaration(String name, Type decl, int line, int pos) throws ConflictingDeclaration, ChangingMeaningOf{
-        this.currentBlock.insertLocalDeclaration(name, decl, line, pos);
+        if(this.currentBlock != null) this.currentBlock.insertLocalDeclaration(name, decl, line, pos);
     }
 
     public void insertParameter(String name, Type t, int line, int pos) throws Redefinition, ChangingMeaningOf{
