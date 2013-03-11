@@ -78,7 +78,8 @@ enumerator_list
 	;
 
 enumerator
-	: IDENTIFIER ('=' constant_expression)?
+	: ^(ENUMERATOR<EnumeratorToken>[$enumerator::enumtor] ^('=' IDENTIFIER constant_expression))
+	| ^(ENUMERATOR<EnumeratorToken>[$enumerator::enumtor] IDENTIFIER)
 	;
 
 simple_declaration

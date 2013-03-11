@@ -51,6 +51,7 @@ tokens{
 	ID_EXPRESSION;
 	FWD_DECLARATION;
 	CLASS_DECLARATION_LIST;
+	ENUMERATOR;
 }
 
 scope Type_Spec{
@@ -960,7 +961,7 @@ import treeNodes4antlr.*;
                 }
 	}
 	
-	private void insertField(String declarator_id, Type t, int id_line, int id_pos, InClassDeclSpec class_specs){
+	private Type insertField(String declarator_id, Type t, int id_line, int id_pos, InClassDeclSpec class_specs){
 		
 		try{
 			if(class_specs.isVirtual == true){
@@ -976,7 +977,7 @@ import treeNodes4antlr.*;
 				}
 
 				if(t.isComplete(currentClass) == true){
-					this.symbolTable.insertField(declarator_id, t, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos);
+					return this.symbolTable.insertField(declarator_id, t, class_specs.isStatic, this.preproc.getCurrentFileName(), id_line, id_pos);
 				}
 				else{
 					this.yield_error("error: field '" + declarator_id + "' has incomplete type", id_line, id_pos);
@@ -998,6 +999,8 @@ import treeNodes4antlr.*;
                 catch(VoidDeclaration v_decl){
                 	this.yield_error(v_decl.getMessage(declarator_id), id_line, id_pos);
                 }
+                
+                return null;
 	}
 	
 	private void insertMethod(String declarator_id, Method m, int id_line, int id_pos, InClassDeclSpec class_specs, boolean insideFunctionDef){
@@ -1593,7 +1596,7 @@ scope decl_id_info;
 			  		}
 			  		else{
 		  				if(externDef == false){
-		  					this.insertField(declarator_id, $data_type, id_line, id_pos, $class_specs);
+		  					$declType = this.insertField(declarator_id, $data_type, id_line, id_pos, $class_specs);
 		  				}
 			  		}
 			  	}
@@ -1619,7 +1622,7 @@ scope decl_id_info;
 					  		}
 					  		else{
 				  				if(externDef == false){
-				  					this.insertField(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
+				  					$declType = this.insertField(declarator_id, decl_inf_t.p_rv, id_line, id_pos, $class_specs);
 				  				}
 					  		}
 				  		}
@@ -1774,7 +1777,7 @@ scope decl_id_info;
 					  		}
 					  		else{
 				  				if(externDef == false){
-				  					this.insertField(declarator_id, ar, id_line, id_pos, $class_specs);
+				  					$declType = this.insertField(declarator_id, ar, id_line, id_pos, $class_specs);
 				  				}
 					  		}
 				  		}
@@ -2035,14 +2038,6 @@ scope{
 	    $template_id::template_arguments = new ArrayList<Type> (); 
 	  }
 	  IDENTIFIER '<' template_argument_list '>'
-	  {
-	  	/*if(this.pending_undeclared_err != null){
-	  		Token t = $IDENTIFIER;
-	  		int line = this.fixLine(t);
-	  		int pos = t.getCharPositionInLine();
-	  		this.yield_error(this.pending_undeclared_err, line, pos);
-	  	}*/
-	  }
 	;
 
 template_argument_list
@@ -2422,6 +2417,9 @@ enumerator_list
 	;
 
 enumerator
+scope{
+  Type enumtor;
+}
 	: IDENTIFIER
 	  {
 	  	if($enum_definition::enumeration != null){
@@ -2429,10 +2427,12 @@ enumerator
 		  	String name = idTok.getText();
 		  	int line = this.fixLine(idTok);
 		  	int pos = idTok.getCharPositionInLine();
-		  	this.insertField(idTok.getText(), $enum_definition::enumeration, line, pos, $enum_definition::spec);
+		  	$enumerator::enumtor = this.insertField(idTok.getText(), $enum_definition::enumeration, line, pos, $enum_definition::spec);
 	  	}
 	  }
-	  ('=' constant_expression)?
+	  (eq = '=' constant_expression)?
+	  -> {$eq != null}? ^(ENUMERATOR<EnumeratorToken>[$enumerator::enumtor] ^($eq IDENTIFIER constant_expression))
+	  -> ^(ENUMERATOR<EnumeratorToken>[$enumerator::enumtor] IDENTIFIER)
 	;
 
 turn_on_normal_mode

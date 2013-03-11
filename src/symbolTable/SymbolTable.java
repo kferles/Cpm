@@ -200,7 +200,7 @@ public class SymbolTable extends Namespace{
         }
     }
     
-    public void insertField(String name, Type t, boolean isStatic, String fileName, int line, int pos) throws ConflictingDeclaration,
+    public Type insertField(String name, Type t, boolean isStatic, String fileName, int line, int pos) throws ConflictingDeclaration,
                                                                                                               ChangingMeaningOf,
                                                                                                               DiffrentSymbol {
         
@@ -217,6 +217,8 @@ public class SymbolTable extends Namespace{
                 break;
         
         }
+        
+        return t;
     }
     
     public void insertMethod(String name, Method m, boolean isStatic, String fileName, int line, int pos, boolean insideMethodDef) throws ConflictingDeclaration, 
