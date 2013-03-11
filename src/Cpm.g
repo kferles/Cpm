@@ -224,6 +224,7 @@ import treeNodes4antlr.*;
 		if(pending_access_viol != null){
 			AccessSpecViolation temp = pending_access_viol;
 			pending_access_viol = null;
+			System.err.println(temp.getMessage());
 		  	return temp.getContextError();
 		}
 		return super.getErrorMessage(e, tokenNames);
