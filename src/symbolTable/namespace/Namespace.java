@@ -351,7 +351,7 @@ public class Namespace implements DefinesNamespace{
 
         if(innerNamespaces == null) innerNamespaces = new HashMap<String, NamespaceElement<Namespace>>();
         this.checkForConflictsInDecl(name, namespace, namespace.line, namespace.pos);
-        if(this.innerSynonynms != null && this.innerTypes.containsKey(name) == true) {
+        if(this.innerTypes != null && this.innerTypes.containsKey(name) == true) {
             NamespaceElement<CpmClass> old_entry = this.innerTypes.get(name);
             String id = this.getFieldsFullName(name);
             throw new DiffrentSymbol(id, namespace, old_entry.element, namespace.line, namespace.pos, old_entry.line, old_entry.pos);
