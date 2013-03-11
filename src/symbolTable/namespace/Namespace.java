@@ -552,6 +552,20 @@ public class Namespace implements DefinesNamespace{
         
         return new LookupResult(name, candidatesTypes, candidateNamespaces, candidateFields, candidateMethods, null, null, ignore_access);
     }
+
+    @Override
+    public LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
+        LookupResult rv;
+        
+        DefinesNamespace curr = this;
+        
+        do{
+            rv = curr.localLookup(name, from_scope, searchInSupers, ignore_access);
+            curr = curr.getParentNamespace();
+        }while(rv.isResultEmpty());
+        
+        return rv;
+    }
     
     @Override
     public boolean isEnclosedInNamespace(DefinesNamespace namespace){
@@ -586,6 +600,7 @@ public class Namespace implements DefinesNamespace{
             }
         }
     }
+
     
     private DefinesNamespace isNameSpace(TypeDefinition n_type) throws InvalidScopeResolution {
         DefinesNamespace rv = null;

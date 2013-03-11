@@ -348,6 +348,20 @@ public class MethodDefinition implements DefinesNamespace{
 
         return new LookupResult(name, types, null, decls, null, null, null, true);
     }
+    
+    @Override
+    public LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
+        LookupResult rv;
+        
+        DefinesNamespace curr = this;
+        
+        do{
+            rv = curr.localLookup(name, from_scope, searchInSupers, ignore_access);
+            curr = curr.getParentNamespace();            
+        }while(rv.isResultEmpty());
+        
+        return rv;
+    }
 
     @Override
     public boolean isEnclosedInNamespace(DefinesNamespace namespace) {

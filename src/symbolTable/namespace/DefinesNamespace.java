@@ -32,6 +32,8 @@ public interface DefinesNamespace {
     
     public  LookupResult localLookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access);
     
+    public LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access);
+    
     public boolean isEnclosedInNamespace(DefinesNamespace namespace);
     
     public void resetNonClassFields();

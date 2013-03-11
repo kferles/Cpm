@@ -938,6 +938,21 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         return new LookupResult(name, candidatesTypes, null, candidateFields, candidateMethods, typeDefsErrors, fieldErrors, ignore_access);
     }
     
+    @Override
+    public LookupResult lookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access){
+        
+        LookupResult rv;
+        
+        DefinesNamespace curr = this;
+        
+        do{
+            rv = curr.localLookup(name, from_scope, searchInSupers, ignore_access);
+            curr = curr.getParentNamespace();
+        }while(rv.isResultEmpty());
+        
+        return rv;
+    }
+    
     private DefinesNamespace isNameSpace(TypeDefinition n_type) throws InvalidScopeResolution {
         DefinesNamespace rv = null;
         if(n_type != null){
