@@ -136,6 +136,12 @@ import treeNodes4antlr.*;
 
 @parser::members {
 
+	private boolean errorInThisPhase = false;
+	
+	public boolean errorsInPhase(){
+		return this.errorInThisPhase;
+	}
+
 	//Symbol Table
 	private SymbolTable symbolTable = new SymbolTable();
 	
@@ -194,7 +200,7 @@ import treeNodes4antlr.*;
 	
 	public String getErrorMessage(RecognitionException e, String[] tokenNames){
 		//e.token.setLine(e.token.getLine()+1);
-		
+		this.errorInThisPhase = true;
 		if(paraphrases.size() > 0){
 			String rv = "";
 			for(Object o : paraphrases)
@@ -240,6 +246,7 @@ import treeNodes4antlr.*;
 	}
 	
 	private void yield_error(String error, boolean need_file_name){
+		this.errorInThisPhase = true;
 		if(need_file_name){
 			String fileName = this.getSourceName();
 			error = fileName + " " + error;
@@ -249,6 +256,7 @@ import treeNodes4antlr.*;
 	} 
 	
 	private void yield_error(String error, int line, int position){
+		this.errorInThisPhase = true;
 		String fileName = this.getSourceName();
 		error = fileName + " line " + line + ":" + position + " " + error;
 		System.err.print(this.preproc.getHeaderError());

@@ -3,7 +3,6 @@ package symbolTable.namespace;
 import errorHandling.AccessSpecViolation;
 import errorHandling.AmbiguousReference;
 import errorHandling.InvalidScopeResolution;
-import java.util.HashMap;
 import java.util.Map;
 
 
@@ -34,5 +33,7 @@ public interface DefinesNamespace {
     public  LookupResult localLookup(String name, DefinesNamespace from_scope, boolean searchInSupers, boolean ignore_access);
     
     public boolean isEnclosedInNamespace(DefinesNamespace namespace);
+    
+    public void resetNonClassFields();
     
 }

@@ -4,6 +4,7 @@ import errorHandling.AccessSpecViolation;
 import errorHandling.AmbiguousReference;
 import errorHandling.ChangingMeaningOf;
 import errorHandling.ConflictingDeclaration;
+import errorHandling.ErrorMessage;
 import errorHandling.InvalidScopeResolution;
 import errorHandling.Redefinition;
 import java.util.ArrayList;
@@ -107,6 +108,10 @@ public class MethodDefinition implements DefinesNamespace{
             if(this.childrenBlocks == null) this.childrenBlocks = new ArrayList<Block>();
             
             this.childrenBlocks.add(newChild);
+        }
+        
+        public void resetNonClassFields(){
+            this.localDeclarations = null;
         }
 
     }
@@ -228,6 +233,8 @@ public class MethodDefinition implements DefinesNamespace{
     
     private Map<String, MethodContentElement<Type>> parameters;
     
+    private List<Block> allBlocks = new ArrayList<Block>();
+    
     public MethodDefinition(DefinesNamespace definedIn){
         this.definedIn = definedIn;
     }
@@ -243,6 +250,7 @@ public class MethodDefinition implements DefinesNamespace{
     public void enterNewBlock(){
         if(this.mainBlock == null){
             this.mainBlock = this.currentBlock = new Block(null, null);
+            this.allBlocks.add(this.mainBlock);
             if(this.parameters != null){
                 for(String paramName : this.parameters.keySet()){
                     MethodContentElement<Type> elem = this.parameters.get(paramName);
@@ -252,7 +260,7 @@ public class MethodDefinition implements DefinesNamespace{
                     /*
                      * These exceptions are handled by the insert parameter method.
                      */
-                    catch (ConflictingDeclaration | ChangingMeaningOf ex) {
+                    catch (ErrorMessage ex) {
 
                     }
                 }
@@ -262,6 +270,7 @@ public class MethodDefinition implements DefinesNamespace{
             Block newBlock = new Block(currentBlock, currentBlock.visibleTypeNames);
             this.currentBlock.addChildBlock(newBlock);
             this.currentBlock = newBlock;
+            this.allBlocks.add(newBlock);
         }
     }
 
@@ -353,6 +362,11 @@ public class MethodDefinition implements DefinesNamespace{
             curr = curr.getParentNamespace();
         }while(curr != null);
         return rv;
+    }
+    
+    @Override
+    public void resetNonClassFields(){
+        for(Block b : this.allBlocks) b.resetNonClassFields();
     }
     
     /*

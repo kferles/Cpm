@@ -569,6 +569,24 @@ public class Namespace implements DefinesNamespace{
         return rv;
     }
     
+    @Override
+    public void resetNonClassFields(){
+        this.fields = null;
+        this.methods = null;
+        
+        if(this.innerNamespaces != null){
+            for(NamespaceElement<Namespace> namElem : this.innerNamespaces.values()){
+                namElem.element.resetNonClassFields();
+            }
+        }
+        
+        if(this.methodDefinitions != null){
+            for(MethodDefinition methDef : this.methodDefinitions){
+                methDef.resetNonClassFields();
+            }
+        }
+    }
+    
     private DefinesNamespace isNameSpace(TypeDefinition n_type) throws InvalidScopeResolution {
         DefinesNamespace rv = null;
         if(n_type != null){

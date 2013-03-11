@@ -806,6 +806,14 @@ public class CpmClass implements DefinesNamespace, TypeDefinition{
         return rv;
     }
     
+    @Override
+    public void resetNonClassFields(){
+        if(this.methodDefinitions != null){
+            for(MethodDefinition methDef : this.methodDefinitions)
+                methDef.resetNonClassFields();
+        }
+    }
+    
     public void setTag(String tag){
         this.struct_union_or_class = tag;
     }
