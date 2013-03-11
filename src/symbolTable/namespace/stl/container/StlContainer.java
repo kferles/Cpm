@@ -129,8 +129,9 @@ public abstract class StlContainer extends CpmClass {
     
     public static StlContainer createGenericContainer(String containerName, DefinesNamespace belongsTo){
 
-        if(containerName.equals("vector") == true){
-            return new CpmVector(belongsTo);
+        switch(containerName){
+            case "vector":
+                return new CpmVector(belongsTo);
         }
         //else other cases (will be added later)
         
