@@ -138,10 +138,6 @@ import treeNodes4antlr.*;
 @parser::members {
 
 	private boolean errorInThisPhase = false;
-	
-	public boolean errorsInPhase(){
-		return this.errorInThisPhase;
-	}
 
 	//Symbol Table
 	private SymbolTable symbolTable = new SymbolTable();
@@ -1056,7 +1052,17 @@ import treeNodes4antlr.*;
 	
 	//using directive aux methods 
 	
+	/*
+	 * public methods to pass information to next phases...
+	 */
 	
+	public boolean errorsInPhase(){
+		return this.errorInThisPhase;
+	}
+	
+	public SymbolTable getSymbolTable(){
+		return this.symbolTable;
+	}
 
 }
 
@@ -1267,7 +1273,7 @@ scope{
 	   	}
 	   }
 	}
-	-> USING_DIRECTIVE<UsingDirectiveToken>[$using_directive::finalNamespace]
+	-> ^(USING_DIRECTIVE<UsingDirectiveToken>[$using_directive::finalNamespace])
 	;
 
 using_directive_tail [Namespace currentNamespace, DefinesNamespace currentScope]
@@ -2642,7 +2648,7 @@ scope normal_mode_fail_level;
   $normal_mode_fail_level::failed = false;
   $destructorDef::isDefinition = false;
 }
-	: destructor_head ';'  -> DESTRUCTOR<DestructorToken>[$destructor_head.m]
+	: destructor_head ';'  -> ^(DESTRUCTOR<DestructorToken>[$destructor_head.m])
 	| {
 		$destructorDef::isDefinition = true;
 		DefinesNamespace in = this.symbolTable.getCurrentNamespace();
@@ -3255,7 +3261,7 @@ scope decl_infered;
 	  		}
 	  	}
 	  }
-	  -> TYPE_NAME<TypeNameToken>[$id, $tp]
+	  -> ^(TYPE_NAME<TypeNameToken>[$id, $tp])
 	;
 
 abstract_declarator
@@ -3483,7 +3489,7 @@ scope{
 	  	}
 	  }
 	  new_declarator?
-	  -> NEW_TYPE_ID<NewTypeIdToken>[$new_type_id::inferedType]
+	  -> ^(NEW_TYPE_ID<NewTypeIdToken>[$new_type_id::inferedType])
 	;
 
 new_declarator
@@ -3632,7 +3638,7 @@ jump_statement	: /*'goto' IDENTIFIER ';'
 	| 'break' ';'!
 	| ret = 'return' exp = expression? ';'
 	  -> {$exp.tree != null}? ^(RETURN_EXP[$ret] expression)
-	  -> RETURN_EXP[$ret]
+	  -> ^(RETURN_EXP[$ret])
 	;
 	
 //C+- aux rules (different rules to adjust C's syntax)
@@ -3648,7 +3654,7 @@ id_expression_tail
 	: '::' IDENTIFIER id_expression_tail
 	-> ^('::' IDENTIFIER id_expression_tail)
 	| IDENTIFIER
-	-> IDENTIFIER
+	-> ^(IDENTIFIER)
 	;
 
 
@@ -3747,7 +3753,7 @@ nested_identifier_tail
 
 		direct_declarator_error($IDENTIFIER.text, this.fixLine($IDENTIFIER), $IDENTIFIER.pos, $declarator_strings::dir_decl_error);
 	  }
-	  -> {$destrName == null}? IDENTIFIER
+	  -> {$destrName == null}? ^(IDENTIFIER)
 	  -> ^($destrName IDENTIFIER)
 	;
 	
@@ -3782,7 +3788,7 @@ scope{
 									  $line_marker::preprocLine = $h_tag.line;
 
 									  //ignore preproc useless stuff 
-									  if(file.equals("<built-in>") == false && file.equals("<command-line>") == false){
+									  if(file.equals("\"<built-in>\"") == false && file.equals("\"<command-line>\"") == false){
 									  
 									  	  this.inStlFile = $line_marker::is_stl_header;
 									  	  this.stlFile = file;
@@ -3807,14 +3813,14 @@ scope{
 										  }
 									  }
 									}
-									-> { $line_marker::is_exit }? LINE_MARKER_EXIT<LineMarkerToken>[$line_marker::baseLine,
-																       $line_marker::preprocLine,
-																       $line_marker::is_stl_header]
-									-> LINE_MARKER_ENTER<EntryLineMarkerToken>[$line_marker::baseLine,
-														   $line_marker::preprocLine,
-														   $line_marker::is_stl_header,
-														   $line_marker::fileName,
-														   $line_marker::includeLine]
+									-> { $line_marker::is_exit }? ^(LINE_MARKER_EXIT<LineMarkerToken>[$line_marker::baseLine,
+																          $line_marker::preprocLine,
+																          $line_marker::is_stl_header])
+									-> ^(LINE_MARKER_ENTER<EntryLineMarkerToken>[$line_marker::baseLine,
+														     $line_marker::preprocLine,
+														     $line_marker::is_stl_header,
+														     $line_marker::fileName,
+														     $line_marker::includeLine])
 	;
 
 line_marker_flags
